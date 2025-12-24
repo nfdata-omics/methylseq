@@ -21,6 +21,7 @@ include { PIPELINE_INITIALISATION   } from './subworkflows/local/utils_nfcore_me
 include { PIPELINE_COMPLETION       } from './subworkflows/local/utils_nfcore_methylseq_pipeline'
 include { getGenomeAttribute        } from './subworkflows/local/utils_nfcore_methylseq_pipeline'
 include { METHYLSEQ                 } from './workflows/methylseq/'
+include { DIFFERENTIAL_METHYLATION_ANALYSIS                 } from './workflows/differential_methylation_analysis/'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,6 +47,8 @@ workflow NFCORE_METHYLSEQ {
 
     take:
     samplesheet // channel: samplesheet read in from --input
+    metadata    // channel: sample metadata table read as --metadata
+
 
     main:
 
@@ -60,39 +63,72 @@ workflow NFCORE_METHYLSEQ {
     ch_or_val_bwameth_index = params.bwameth_index ? channel.fromPath(params.bwameth_index).map{ it -> [ [id:it.baseName], it ] } : []
     ch_or_val_bwamem_index  = params.bwamem_index  ? channel.fromPath(params.bwamem_index).map{ it -> [ [id:it.baseName], it ] } : []
 
-    //
-    // SUBWORKFLOW: Prepare any required reference genome indices
-    //
-    FASTA_INDEX_METHYLSEQ(
-        ch_fasta,
-        ch_or_val_fasta_index,
-        ch_or_val_bismark_index,
-        ch_or_val_bwameth_index,
-        ch_or_val_bwamem_index,
-        params.aligner,
-        params.collecthsmetrics,
-        params.use_mem2
-    )
-    ch_versions = ch_versions.mix(FASTA_INDEX_METHYLSEQ.out.versions)
-
+    
     //
     // WORKFLOW: Run pipeline
     //
 
-    METHYLSEQ (
-        samplesheet,
-        ch_versions,
-        FASTA_INDEX_METHYLSEQ.out.fasta,
-        FASTA_INDEX_METHYLSEQ.out.fasta_index,
-        FASTA_INDEX_METHYLSEQ.out.bismark_index,
-        FASTA_INDEX_METHYLSEQ.out.bwameth_index,
-        FASTA_INDEX_METHYLSEQ.out.bwamem_index,
-    )
-    ch_versions = ch_versions.mix(METHYLSEQ.out.versions)
+    // Parametri di controllo
+    //params.primary_analysis   = true   // o false
+    //params.advanced_analysis  = false  // o true
 
-    emit:
-    multiqc_report = METHYLSEQ.out.multiqc_report // channel: [ path(multiqc_report.html )  ]
-    versions       = ch_versions                  // channel: [ path(versions.yml) ]
+    // --- Branch principale: METHYLSEQ ---
+    if (params.primary_analysis) {
+
+        //
+        // SUBWORKFLOW: Prepare any required reference genome indices
+        //
+        FASTA_INDEX_METHYLSEQ(
+            ch_fasta,
+            ch_or_val_fasta_index,
+            ch_or_val_bismark_index,
+            ch_or_val_bwameth_index,
+            ch_or_val_bwamem_index,
+            params.aligner,
+            params.collecthsmetrics,
+            params.use_mem2
+        )
+        ch_versions = ch_versions.mix(FASTA_INDEX_METHYLSEQ.out.versions)
+
+
+        METHYLSEQ (
+            samplesheet,
+            ch_versions,
+            FASTA_INDEX_METHYLSEQ.out.fasta,
+            FASTA_INDEX_METHYLSEQ.out.fasta_index,
+            FASTA_INDEX_METHYLSEQ.out.bismark_index,
+            FASTA_INDEX_METHYLSEQ.out.bwameth_index,
+            FASTA_INDEX_METHYLSEQ.out.bwamem_index,
+        )
+        ch_versions = ch_versions.mix(METHYLSEQ.out.versions)
+
+        if (params.advanced_analysis) {
+
+        DIFFERENTIAL_METHYLATION_ANALYSIS (
+                    ch_versions,
+                    METHYLSEQ.out.methylation_coverage,
+                    metadata
+                )
+
+            }
+
+    }
+
+    // --- Branch per DIFFERENTIAL_METHYLATION_ANALYSIS ---
+    if (params.advanced_analysis) {
+
+               DIFFERENTIAL_METHYLATION_ANALYSIS (
+                    ch_versions,
+                    samplesheet,
+                    metadata
+                )
+    
+    }
+ 
+
+    //emit:
+    //multiqc_report = METHYLSEQ.out.multiqc_report // channel: [ path(multiqc_report.html )  ]
+    //versions       = ch_versions                  // channel: [ path(versions.yml) ]
 
 }
 /*
@@ -116,19 +152,22 @@ workflow {
         params.input,
         params.help,
         params.help_full,
-        params.show_hidden
+        params.show_hidden,
+        params.metadata
     )
 
     //
     // WORKFLOW: Run main workflow
     //
     NFCORE_METHYLSEQ (
-        PIPELINE_INITIALISATION.out.samplesheet
+        PIPELINE_INITIALISATION.out.samplesheet,
+        PIPELINE_INITIALISATION.out.metadata
     )
+
     //
     // SUBWORKFLOW: Run completion tasks
     //
-    PIPELINE_COMPLETION (
+    /*PIPELINE_COMPLETION (
         params.email,
         params.email_on_fail,
         params.plaintext_email,
@@ -136,7 +175,7 @@ workflow {
         params.monochrome_logs,
         params.hook_url,
         NFCORE_METHYLSEQ.out.multiqc_report
-    )
+    )*/
 }
 
 /*

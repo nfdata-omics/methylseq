@@ -36,6 +36,9 @@ workflow PIPELINE_INITIALISATION {
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
     show_hidden       // boolean: Show hidden parameters in the help message
+    metadata          //  string: Path to the table with the sample metadata
+
+
 
     main:
 
@@ -99,30 +102,74 @@ workflow PIPELINE_INITIALISATION {
     //
     validateInputParameters()
 
+
     //
     // Create channel from input file provided through params.input
     //
 
-    channel
-        .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
-        .map {
-            meta, fastq_1, fastq_2, genome ->
+    if (params.primary_analysis) {
+
+        /*
+        * PRIMARY (or PRIMARY + ADVANCED)
+        * Use original nf-core samplesheet parsing
+        */
+
+        channel
+            .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
+            .map { meta, fastq_1, fastq_2, genome ->
                 if (!fastq_2) {
-                    return [ meta.id, meta + [ single_end:true ], [ fastq_1 ] ]
+                    return [ meta.id, meta + [ single_end: true ], [ fastq_1 ] ]
                 } else {
-                    return [ meta.id, meta + [ single_end:false ], [ fastq_1, fastq_2 ] ]
+                    return [ meta.id, meta + [ single_end: false ], [ fastq_1, fastq_2 ] ]
                 }
-        }
-        .groupTuple()
-        .map { samplesheet ->
-            validateInputSamplesheet(samplesheet)
-        }
-        .set { ch_samplesheet }
-    ch_samplesheet.dump(tag: "ch_samplesheet")
+            }
+            .groupTuple()
+            .map { samplesheet ->
+                validateInputSamplesheet(samplesheet)
+            }
+            .set { ch_samplesheet }
+
+        ch_samplesheet.dump(tag: "ch_samplesheet")
+
+    }
+    else if (!params.primary_analysis && params.advanced_analysis) {
+
+        /*
+        * ADVANCED ONLY
+        * Parse params.input as advanced samplesheet
+        */
+
+        Channel
+            .fromPath(params.input, checkIfExists: true)
+            .splitCsv(header: true)
+            .map { row ->
+                def meta = [ id: row.sample ]
+                tuple(
+                    meta,
+                    file(row.meth_cov)
+                )
+            }
+            .set { ch_samplesheet }
+
+        ch_samplesheet.dump(tag: "ch_samplesheet")
+
+    }
+    else {
+        error "Invalid parameter combination: primary_analysis=${params.primary_analysis}, advanced_analysis=${params.advanced_analysis}"
+    }
+
+
+     //
+    // TODO: Validation of the metadata table
+    //
+
+    ch_metadata = metadata ? Channel.value(file(metadata, checkIfExists: true)) : null
+
 
     emit:
     samplesheet = ch_samplesheet
     versions    = ch_versions
+    metadata    = ch_metadata
 }
 
 /*
