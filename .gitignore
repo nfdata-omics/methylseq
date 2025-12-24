@@ -9,3 +9,5 @@ testing*
 null/
 .nf-test.log
 .nf-test/
+results*/
+projects/

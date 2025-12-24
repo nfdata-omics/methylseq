@@ -140,6 +140,7 @@ workflow METHYLSEQ {
         ch_bai         = FASTQ_ALIGN_DEDUP_BISMARK.out.bai
         ch_bedgraph    = FASTQ_ALIGN_DEDUP_BISMARK.out.methylation_bedgraph
         ch_aligner_mqc = FASTQ_ALIGN_DEDUP_BISMARK.out.multiqc
+        methylation_coverage  = FASTQ_ALIGN_DEDUP_BISMARK.out.methylation_coverage 
         ch_versions    = ch_versions.mix(FASTQ_ALIGN_DEDUP_BISMARK.out.versions)
     }
     // Aligner: bwameth
@@ -408,6 +409,7 @@ workflow METHYLSEQ {
     preseq         = ch_preseq                   // channel: [ val(meta), path(preseq) ]
     multiqc_report = ch_multiqc_report            // channel: [ path(multiqc_report.html )  ]
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
+    methylation_coverage = methylation_coverage    // channel: [ val(meta), path(methylation_coverage) ]
 }
 
 /*
