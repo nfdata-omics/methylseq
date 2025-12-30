@@ -5,7 +5,8 @@
 */
 
 include { softwareVersionsToYAML } from '../../subworkflows/nf-core/utils_nfcore_pipeline'
-include { METHYLKIT_QC } from '../../modules/local/methylkit_qc/main.nf'
+include { METHYLKIT_QC  } from '../../modules/local/methylkit_qc/main.nf'
+include { METHYLKIT_DMA } from '../../modules/local/methylkit_differential_meth_analysis/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -52,6 +53,18 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         )
 
     //////////////
+
+    METHYLKIT_DMA(
+        METHYLKIT_QC.out.meth_norm_rda ,
+        METHYLKIT_QC.out.methylDB_dir , 
+        params.diff_cutoff,
+        params.qvalue_cutoff,
+        params.overdispersion,  
+        params.adjust 
+        )
+
+    //////////////
+
 
     /*
      * Collate and save software versions
