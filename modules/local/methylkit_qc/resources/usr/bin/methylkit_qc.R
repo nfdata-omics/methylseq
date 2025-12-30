@@ -122,7 +122,7 @@ dev.off()
 
 # PCA
 
-#my_prcomp = PCASamples(meth, obj.return = TRUE)
+my_prcomp = PCASamples(meth, obj.return = TRUE)
 
 var_exp = round(
   (my_prcomp$sdev^2) / sum(my_prcomp$sdev^2) * 100,

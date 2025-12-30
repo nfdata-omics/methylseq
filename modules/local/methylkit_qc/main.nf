@@ -18,7 +18,8 @@ process METHYLKIT_QC {
     val  sample_suffix
 
     output:
-    path "meth_merged_data.rda"
+    path "meth_merged_data.rda"  , emit: meth_norm_rda
+    path "methylDB"             , emit: methylDB_dir
     path "*.pdf"
 
     script:
