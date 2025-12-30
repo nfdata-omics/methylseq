@@ -17,7 +17,9 @@ process METHYLKIT_DMA {
     val  adjust
 
     output:
-    path "*.tsv"
+    path "diffMeth_hyper.tsv", emit: diff_meth_hyper
+    path "diffMeth_hypo.tsv" , emit: diff_meth_hypo
+    path "diffMeth_all.tsv"  , emit: diff_meth_all
     path "*.pdf"
 
     script:

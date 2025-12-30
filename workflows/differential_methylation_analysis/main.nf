@@ -5,8 +5,9 @@
 */
 
 include { softwareVersionsToYAML } from '../../subworkflows/nf-core/utils_nfcore_pipeline'
-include { METHYLKIT_QC  } from '../../modules/local/methylkit_qc/main.nf'
-include { METHYLKIT_DMA } from '../../modules/local/methylkit_differential_meth_analysis/main.nf'
+include { METHYLKIT_QC         } from '../../modules/local/methylkit_qc/main.nf'
+include { METHYLKIT_DMA        } from '../../modules/local/methylkit_differential_meth_analysis/main.nf'
+include { METHYLKIT_ANNOTATION } from '../../modules/local/methylkit_annotation/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,6 +65,12 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         )
 
     //////////////
+
+    METHYLKIT_ANNOTATION (
+        METHYLKIT_DMA.out.diff_meth_all ,
+        params.refseq_bed,
+        params.cpg_bed
+    )
 
 
     /*
