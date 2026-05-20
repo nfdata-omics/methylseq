@@ -22,7 +22,13 @@ option_list = list(
   make_option("--group_case", type="character",
               help="Value defining treatment group (coded as 1)"),
   make_option("--assembly", type="character", default="mm10"),
-  make_option("--cores", type="integer", default=4)
+  make_option("--cores", type="integer", default=4),
+  make_option("--lo_count", type="integer", default=5),
+  make_option("--lo_perc", type="double", default=NA),
+  make_option("--hi_count", type="integer", default=NA),
+  make_option("--hi_perc", type="double", default=99.9),
+  make_option("--destrand", type="logical", default=FALSE),
+  make_option("--min_per_group", type="double", default=1)
 )
 
 opt = parse_args(OptionParser(option_list=option_list))
@@ -34,6 +40,13 @@ group_column  <- opt$group_column
 group_case    <- opt$group_case    
 assembly <- opt$assembly      
 cores    <- opt$cores      
+
+lo_count      <- opt$lo_count
+lo_perc       <- if (is.na(opt$lo_perc)) NULL else opt$lo_perc
+hi_count      <- if (is.na(opt$hi_count)) NULL else opt$hi_count
+hi_perc       <- if (is.na(opt$hi_perc)) NULL else opt$hi_perc
+destrand      <- opt$destrand
+min_per_group <- opt$min_per_group
 
 #functions 
 plot_pca = function(df, pcx, pcy, color_var, var_exp) {
@@ -89,19 +102,22 @@ methData = methRead(location=files_list,
                     dbdir="methylDB")
 
 
-methData.filt <- filterByCoverage(methData,
-                                  lo.count=5,
-                                  lo.perc=NULL,
-                                  hi.count=NULL,
-                                  hi.perc=99.9)
+methData.filt <- filterByCoverage(
+  methData,
+  lo.count = lo_count,
+  lo.perc  = lo_perc,
+  hi.count = hi_count,
+  hi.perc  = hi_perc
+)
 
 
 methData.norm = normalizeCoverage(methData.filt, method = "median")
 
 meth = unite(
   methData.norm,
-  destrand = FALSE,
-  mc.cores = cores
+  destrand = destrand,
+  mc.cores = cores,
+  min.per.group = min_per_group
 )
 
 save(meth, file = "meth_merged_data.rda")

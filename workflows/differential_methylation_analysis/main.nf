@@ -42,7 +42,6 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         )*/
 
     ////////////////DEV
-
     METHYLKIT_QC(
         ch_cov_dir,
         metadata_ch,
@@ -50,12 +49,18 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         params.group_case,
         params.assembly,
         params.cores,
-        params.sample_suffix
-        )
+        params.sample_suffix,
+        params.lo_count,
+        params.lo_perc,
+        params.hi_count,
+        params.hi_perc,
+        params.destrand,
+        params.min_per_group
+    )
 
     //////////////
 
-    METHYLKIT_DMA(
+    /*METHYLKIT_DMA(
         METHYLKIT_QC.out.meth_norm_rda ,
         METHYLKIT_QC.out.methylDB_dir , 
         params.diff_cutoff,
@@ -70,13 +75,14 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         METHYLKIT_DMA.out.diff_meth_all ,
         params.refseq_bed,
         params.cpg_bed
-    )
+    )*/
 
 
     /*
      * Collate and save software versions
      */
-    softwareVersionsToYAML(ch_versions)
+
+    /*softwareVersionsToYAML(ch_versions)
         .collectFile(
             storeDir: "${params.outdir}/pipeline_info",
             name: 'nf_core_methylseq_software_mqc_versions.yml',
@@ -86,7 +92,7 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         .set { ch_collated_versions }
 
     emit:
-    versions = ch_versions
+    versions = ch_versions*/
 }
 
 /*
