@@ -41,7 +41,7 @@ out_prefix <- opt$out_prefix
 # -----------------------------
 dmr_df <- read.delim(dmr_tsv)
 
-dmr_df$chr <- paste0("chr", dmr_df$chr)
+#dmr_df$chr <- paste0("chr", dmr_df$chr)
 
 dmr_gr <- makeGRangesFromDataFrame(
   dmr_df,
@@ -70,7 +70,7 @@ gene_part_df <- data.frame(
 
 write.table(
   gene_part_df,
-  "hyper_cpg_gene_parts.tsv",
+  "cpg_gene_parts.tsv",
   sep = "\t",
   row.names = FALSE,
   quote = FALSE
@@ -96,8 +96,10 @@ write.table(
 # Gene feature summary plot
 # -----------------------------
 pdf(paste0(out_prefix, "_gene_parts.pdf"))
+
 plotTargetAnnotation(dmr_gene_anot,
                      main = "Differential Methylation – Gene Annotation")
+
 dev.off()
 
 # -----------------------------
@@ -124,7 +126,7 @@ cpg_context_df <- data.frame(
 
 write.table(
   cpg_context_df,
-  "hyper_cpg_cpg_context.tsv",
+  "cpg_context.tsv",
   sep = "\t",
   row.names = FALSE,
   quote = FALSE
@@ -133,9 +135,11 @@ write.table(
 #saveRDS(dmr_cpg_anot, paste0(out_prefix, "_cpg_annotation.rds"))
 
 # CpG annotation plot
-pdf(paste0(out_prefix, "_cpg_annotation.pdf"))
+pdf(paste0(out_prefix, "_cpg_context.pdf"))
+
 plotTargetAnnotation(dmr_cpg_anot,
                      main = "Differential Methylation – CpG Context")
+
 dev.off()
 
 cat("Annotation completed successfully\n")

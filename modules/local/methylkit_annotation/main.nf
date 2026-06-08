@@ -1,10 +1,10 @@
 process METHYLKIT_ANNOTATION {
 
-    tag "${meta_id}"
+    //tag "${meta_id}"
     container 'docker.io/yussab/methylkit:1.0'
     publishDir "${params.outdir}/methylkit", mode: 'copy'
 
-    cpus { cores }
+    //cpus { cores }
     memory '8 GB'
     time '24h'
 
