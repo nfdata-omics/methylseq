@@ -1,0 +1,72 @@
+# This file describes the detectors used to scan for DMRs. Lines in this
+# file should have the format:
+#
+#   key: value
+#
+# Lines that don't match this pattern, or that start with '#' are ignored.
+#
+# The file is divided into sections, each one of which specifies a DMR detector. The section
+# should start with a line having 'type' as the key, and ends with a line containing only '--'.
+#
+# The key can be followed by a tag (separated by '_') to specify the type of value. Possible tags:
+#
+#  s = string (default)
+#  i = integer
+#  f = float
+#  b = boolean ('True' = True, everything else is False)
+
+# StreamingDMRfinder looks for stretches of hyper- or hypo-methylated sites. 
+type: StreamingDMRfinder
+# outfile specifies the name of the output file (valid for all DMR detectors).
+outfile: hyper.txt
+# Sites with a methylation change larger than this value are considered 'good'
+# (i.e., hyper-methylated).
+threshold_f: 0.2
+# Number of consecutive 'good' sites that must be seen to open a DMR.
+nopen_i: 2
+# Maximum number of 'bad' sites that can be tolerated without closing the DMR.
+nskip_i: 1
+# Maximum allowed distance between consecutive 'good' sites
+maxdist_i: 1000
+# If slop is non-zero, add basepairs before first site and after last site. Slop
+# can be specified in two ways. If the value is an integer, it represents a fixed
+# number of basepairs:
+slop_i: 100
+# If the value is float, it is interpreted as a fraction of the DMR size
+# slop_f: 0.2
+# If symmetrical is True, requires nopen 'good' sites at the end of a DMR too.
+# instead of only at the beginning (not implemented yet).
+# symmetrical_b: True
+--
+
+type: StreamingDMRfinder
+# If direction is -1, look for hypo-methylated sites instead.
+direction_i: -1
+outfile: hypo.txt
+threshold_f: 0.2
+nopen_i: 2
+maxdist_i: 1000
+--
+
+# WindowCountDMRfinder counts the number of hyper- and hypo-methylated sites in each window, and reports
+# windows in which the ratio of the two counts is over a specified value.
+type: WindowCountDMRfinder
+outfile: hyper-win.txt
+# Window size
+winsize_i: 10000
+# Sites with a methylation change larger than this value are considered 'good'
+# (i.e., hyper- or hypo-methylated).
+threshold_f: 0.2
+# Limit on the ratio of hyper- and hypo-methylated sites. E.g., if a region contains 4 hyper-methylated
+# sites and 1 hypo-methylated sites, it will be reported. If it had 3 hypo-methylated sites, it would
+# not be.
+ratio_f: 2
+--
+
+type: WindowCountDMRfinder
+# If direction is negative, invert the ratio: report regions for which the number of hypo-methylated
+# sites over the number of hypo-methylated sites is greater than ratio.
+direction_i: -1
+outfile: hypo-win.txt
+winsize_i: 10000
+--
