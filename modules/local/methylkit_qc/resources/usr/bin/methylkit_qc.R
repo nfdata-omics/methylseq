@@ -101,7 +101,7 @@ methData.filt <- filterByCoverage(
 
 methData.norm = normalizeCoverage(methData.filt, method = "median")
 
-meth = unite(
+methData.unite = unite(
   methData.norm,
   destrand = destrand,
   mc.cores = cores,
