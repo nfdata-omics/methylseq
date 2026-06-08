@@ -26,7 +26,7 @@ option_list = list(
   make_option("--lo_count", type="integer", default=5),
   make_option("--lo_perc", type="double", default=NA),
   make_option("--hi_count", type="integer", default=NA),
-  make_option("--hi_perc", type="double", default=99.9),
+  make_option("--hi_perc", type="double", default=NA),
   make_option("--destrand", type="logical", default=FALSE),
   make_option("--min_per_group", type="double", default=1)
 )
@@ -47,18 +47,6 @@ hi_count      <- if (is.na(opt$hi_count)) NULL else opt$hi_count
 hi_perc       <- if (is.na(opt$hi_perc)) NULL else opt$hi_perc
 destrand      <- opt$destrand
 min_per_group <- opt$min_per_group
-
-#functions 
-plot_pca = function(df, pcx, pcy, color_var, var_exp) {
-  ggplot(df, aes(.data[[pcx]], .data[[pcy]], color=.data[[color_var]])) +
-    geom_point(size=3) +
-    geom_text_repel(aes(label=sample), size=3) +
-    theme_light() +
-    labs(
-      x = paste0(pcx, " (", var_exp[as.numeric(sub("PC","",pcx))], "%)"),
-      y = paste0(pcy, " (", var_exp[as.numeric(sub("PC","",pcy))], "%)")
-    )
-}
 
 #input checks
 stopifnot(
@@ -120,7 +108,7 @@ meth = unite(
   min.per.group = min_per_group
 )
 
-save(meth, file = "meth_merged_data.rda")
+save(methData, methData.filt, methData.norm, methData.unite, meta, file = "meth_merged_data.rda")
 
 # QC 
 
@@ -137,8 +125,18 @@ for (i in seq_along(methData)) {
 dev.off()
 
 # PCA
+plot_pca = function(df, pcx, pcy, color_var, var_exp) {
+  ggplot(df, aes(.data[[pcx]], .data[[pcy]], color=.data[[color_var]])) +
+    geom_point(size=3) +
+    geom_text_repel(aes(label=sample), size=3) +
+    theme_light() +
+    labs(
+      x = paste0(pcx, " (", var_exp[as.numeric(sub("PC","",pcx))], "%)"),
+      y = paste0(pcy, " (", var_exp[as.numeric(sub("PC","",pcy))], "%)")
+    )
+}
 
-my_prcomp = PCASamples(meth, obj.return = TRUE)
+my_prcomp = PCASamples(methData.unite, obj.return = TRUE)
 
 var_exp = round(
   (my_prcomp$sdev^2) / sum(my_prcomp$sdev^2) * 100,
@@ -152,21 +150,126 @@ var_df = data.frame(
 )
 
 scores = as.data.frame(my_prcomp$x)
-pca_df = cbind(scores[,1:4], meta)
+#pca_df = cbind(scores[,1:4], meta) # TODO: why from 1 to 4?
+pca_df = cbind(scores, meta)
 pca_df$sample = rownames(pca_df)
 
 pdf("PCA_covariates.pdf")
 
-ggplot(var_df[1:10,], aes(PC, variance)) +
+ggplot(var_df, aes(PC, variance)) +
   geom_col() +
   geom_text(aes(label=paste0(variance, "%")), vjust=-0.3) +
   theme_light()
 
-
 for (col in colnames(meta)) {
   print(plot_pca(pca_df, "PC1", "PC2", col, var_exp))
+}
+for (col in colnames(meta)) {
+  print(plot_pca(pca_df, "PC3", "PC4", col, var_exp))
 }
 
 dev.off()
 
+#DEV
 
+#Plot common methylated sites
+covered_sites <- sapply(methData.norm, function(x) nrow(getData(x)))
+sample_names  <- sapply(methData.norm, function(x) x@sample.id)
+
+cov_df <- data.frame(
+  sample = sample_names,
+  covered_sites = covered_sites,
+  stringsAsFactors = FALSE
+)
+
+common_sites <- nrow(getData(methData.unite))
+
+library(scales)
+
+p <- ggplot(cov_df, aes(x = sample, y = covered_sites)) +
+  geom_col(fill = "steelblue") +
+  geom_hline(
+    yintercept = common_sites,
+    color = "red",
+    linewidth = 1
+  ) +
+  scale_y_continuous(labels = label_comma()) +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "CpG site coverage per sample",
+    subtitle = paste(
+      "Red dashed line = common CpG sites used for PCA (",
+      common_sites, ")",
+      sep = ""
+    ),
+    x = "Sample",
+    y = "Number of CpG sites"
+  )
+
+# Aggiungere altro plot oltre a quello che c'è già per mostrare quante posizioni hanno coverage>10
+# in ciascuna delle posizioni dello unite, per ogni sample
+# Così si capisce se nella definizione dello unite il contributo dei diversi samples è stato bilanciato o no
+
+ggsave("covered_sites.pdf", p, width=8, height=5)
+dev.off()
+
+###  Clustering (Extra)
+pdf("clustering_dendrogram.pdf")
+par(mar=c(7,3,3,3))
+
+mat <- methylKit::percMethylation(methData.unite)
+corr <- cor(mat, use = "pairwise.complete.obs")
+
+library(pheatmap)
+
+pheatmap(
+  corr,
+  color = colorRampPalette(c("navy", "white", "firebrick3"))(100),
+  clustering_distance_rows = "correlation",
+  clustering_distance_cols = "correlation",
+  border_color = NA,
+  fontsize_row = 10,
+  fontsize_col = 10
+)
+
+clusterSamples(methData.unite, dist="correlation", method="ward", plot=TRUE)
+
+dev.off()
+
+
+
+# Save tables
+normalized_dataset <- getData(methData.unite)
+
+write.table(
+      normalized_dataset,
+      file = "normalized_dataset.tsv",
+      sep = "\t",
+      quote = FALSE,
+      row.names = FALSE
+    )
+
+#write_methylkit_list_tables <- function(obj, prefix) {
+
+#  dir.create(prefix, showWarnings = FALSE, recursive = TRUE)
+
+#  for (i in seq_along(obj)) {
+#    sample_name <- obj[[i]]@sample.id
+##    sample_name <- gsub("[^A-Za-z0-9_.-]", "_", sample_name)
+
+#    df <- methylKit::getData(obj[[i]])
+
+#    write.table(
+#      df,
+#      file = file.path(prefix, paste0(sample_name, ".tsv")),
+#      sep = "\t",
+#      quote = FALSE,
+#      row.names = FALSE
+#    )
+#  }
+#}
+
+#write_methylkit_list_tables(methData,      "tables_methData")
+#write_methylkit_list_tables(methData.filt, "tables_methData_filt")
+#write_methylkit_list_tables(methData.norm, "tables_methData_norm")

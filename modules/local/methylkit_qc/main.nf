@@ -1,8 +1,8 @@
 process METHYLKIT_QC {
 
-     tag "${group_column}_${group_case}"
+    //tag "${group_column}_${group_case}"
     container 'docker.io/yussab/methylkit:1.0'
-    publishDir "${params.outdir}/methylkit/${group_column}_${group_case}", mode: 'copy'
+    publishDir "${params.outdir}/methylkit/preprocessing", mode: 'copy'
 
     cpus { cores }
     memory '8 GB'
@@ -24,9 +24,11 @@ process METHYLKIT_QC {
     val min_per_group
 
     output:
-    tuple val([ id: "${group_column}_${group_case}" ]), path("meth_merged_data.rda"), emit: meth_norm_rda
-    tuple val([ id: "${group_column}_${group_case}" ]), path("methylDB"),             emit: methylDB_dir
-    tuple val([ id: "${group_column}_${group_case}" ]), path("*.pdf"),                emit: pdf
+    
+    path("meth_merged_data.rda"), emit: meth_norm_rda
+    path("methylDB"),             emit: methylDB_dir
+    path("*.pdf"),                emit: pdf
+    path("*.tsv"),                emit: tsv
 
     script:
     """
