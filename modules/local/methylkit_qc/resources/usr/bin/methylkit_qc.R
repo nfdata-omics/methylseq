@@ -28,7 +28,7 @@ option_list = list(
   make_option("--hi_count", type="integer", default=NA),
   make_option("--hi_perc", type="double", default=NA),
   make_option("--destrand", type="logical", default=FALSE),
-  make_option("--min_per_group", type="double", default=1)
+  make_option("--min_per_group", type = "character", default = NA)
 )
 
 opt = parse_args(OptionParser(option_list=option_list))
@@ -47,6 +47,15 @@ hi_count      <- if (is.na(opt$hi_count)) NULL else opt$hi_count
 hi_perc       <- if (is.na(opt$hi_perc)) NULL else opt$hi_perc
 destrand      <- opt$destrand
 min_per_group <- opt$min_per_group
+
+if (is.na(min_per_group) || min_per_group %in% c("NA", "NULL", "null", "")) {
+  min_per_group <- NULL
+} else {
+  min_per_group <- as.integer(min_per_group)
+  if (is.na(min_per_group)) {
+    stop("--min_per_group must be an integer or NA")
+  }
+}
 
 #input checks
 stopifnot(
@@ -70,10 +79,20 @@ sample_ids = sub(sample_suffix, "", basename(files_list))
 files_list = files_list[sample_ids %in% rownames(meta)]
 sample_ids = sample_ids[sample_ids %in% rownames(meta)]
 
+if (length(files_list) == 0) {
+  stop("No coverage files matched metadata row names after stripping sample_suffix")
+}
+
 meta = meta[sample_ids, , drop = FALSE]
 files_list = as.list(files_list)
 
+if (!group_column %in% colnames(meta)) {
+  stop("group_column not found in metadata: ", group_column)
+}
+
 treat = ifelse(meta[[group_column]] == group_case, 1, 0)
+
+
 
 # data normalization
 
@@ -101,12 +120,28 @@ methData.filt <- filterByCoverage(
 
 methData.norm = normalizeCoverage(methData.filt, method = "median")
 
-methData.unite = unite(
-  methData.norm,
+#methData.unite = unite(
+#  methData.norm,
+#  destrand = destrand,
+#  mc.cores = cores,
+#  min.per.group = min_per_group
+#)
+
+unite_args <- list(
+  object = methData.norm,
   destrand = destrand,
-  mc.cores = cores,
-  min.per.group = min_per_group
+  mc.cores = cores
 )
+
+if (!is.null(min_per_group)) {
+  unite_args$min.per.group <- min_per_group
+}
+
+methData.unite <- do.call(unite, unite_args)
+
+if (nrow(getData(methData.unite)) == 0) {
+  stop("unite() returned zero CpG sites")
+}
 
 save(methData, methData.filt, methData.norm, methData.unite, meta, file = "meth_merged_data.rda")
 
@@ -164,8 +199,14 @@ ggplot(var_df, aes(PC, variance)) +
 for (col in colnames(meta)) {
   print(plot_pca(pca_df, "PC1", "PC2", col, var_exp))
 }
-for (col in colnames(meta)) {
-  print(plot_pca(pca_df, "PC3", "PC4", col, var_exp))
+#for (col in colnames(meta)) {
+#  print(plot_pca(pca_df, "PC3", "PC4", col, var_exp))
+#}
+
+if (all(c("PC3", "PC4") %in% colnames(pca_df))) {
+  for (col in colnames(meta)) {
+    print(plot_pca(pca_df, "PC3", "PC4", col, var_exp))
+  }
 }
 
 dev.off()
@@ -197,12 +238,8 @@ p <- ggplot(cov_df, aes(x = sample, y = covered_sites)) +
   theme_light() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(
-    title = "CpG site coverage per sample",
-    subtitle = paste(
-      "Red dashed line = common CpG sites used for PCA (",
-      common_sites, ")",
-      sep = ""
-    ),
+    title = paste0("CpG site coverage per sample (Replicate requirement : ", min_per_group,  ")"),
+    subtitle = paste0("Horizontal line = common CpG sites used for PCA (", common_sites, ")"),
     x = "Sample",
     y = "Number of CpG sites"
   )
@@ -244,7 +281,7 @@ normalized_dataset <- getData(methData.unite)
 
 write.table(
       normalized_dataset,
-      file = "normalized_dataset.tsv",
+      file = "methylkit_normalized_dataset.tsv",
       sep = "\t",
       quote = FALSE,
       row.names = FALSE
