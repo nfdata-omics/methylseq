@@ -15,6 +15,8 @@ option_list <- list(
   make_option("--group_column", type = "character", help = "Metadata column defining groups"),
   make_option("--group1", type = "character", help = "First group / condition"),
   make_option("--group2", type = "character", help = "Second group / condition"),
+  make_option("--group_case", type="character",
+              help="Value defining treatment group (coded as 1)"),
   make_option("--sep", type = "character", default = ",", help = "Metadata separator"),
   make_option("--min_coverage", type = "integer", default = 5),
   make_option("--smoothing_single", type = "logical", default = TRUE),
@@ -24,8 +26,8 @@ option_list <- list(
   make_option("--delta", type = "double", default = 0.10),
   make_option("--minlen", type = "integer", default = 20),
   make_option("--minCG", type = "integer", default = 3),
-  make_option("--dis_merge", type = "integer", default = 50),
-  make_option("--out_prefix", type = "character", default = NA)
+  make_option("--dis_merge", type = "integer", default = 50)
+  #make_option("--out_prefix", type = "character", default = NA)
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -33,11 +35,25 @@ opt <- parse_args(OptionParser(option_list = option_list))
 cov_dir <- opt$cov_dir
 metadata <- opt$metadata
 sample_suffix <- opt$sample_suffix
-pattern <- opt$pattern
-group_column <- opt$group_column
+group_column  <- opt$group_column
+group_case    <- opt$group_case
 group1 <- opt$group1
 group2 <- opt$group2
+
+#Usare default
+pattern <- opt$pattern
 sep <- opt$sep
+
+smoothing_single     <- opt$smoothing_single
+smoothing_replicates <- opt$smoothing_replicates
+smoothing_span   <- opt$smoothing_span
+
+min_coverage <- opt$min_coverage
+p_threshold  <- opt$p_threshold
+delta        <- opt$delta
+minlen       <- opt$minlen
+minCG        <- opt$minCG
+dis_merge    <- opt$dis_merge
 
 #debug
 #cov_dir <- "/Users/youssef.abili/HT/DATA/sallese/dss-single/input"
@@ -49,20 +65,22 @@ sep <- opt$sep
 #group2 <- "Mut"
 #sep <- ","
 
-out_prefix <- if (is.na(opt$out_prefix)) {
-  paste0(group1, "_vs_", group2)
-} else {
-  opt$out_prefix
+is_blank <- function(x) {
+  is.null(x) || length(x) == 0 || is.na(x) || !nzchar(x)
 }
 
-smoothing_span <- if (is.na(opt$smoothing_span)) NULL else opt$smoothing_span
+#out_prefix <- if (is.na(opt$out_prefix)) {
+#  paste0(group1, "_vs_", group2)
+#} else {
+#  opt$out_prefix
+#}
+
+smoothing_span <- if (is.na(smoothing_span)) NULL else smoothing_span
 
 stopifnot(
   dir.exists(cov_dir),
   file.exists(metadata),
-  !is.null(group_column),
-  !is.null(group1),
-  !is.null(group2)
+  !is_blank(group_column)
 )
 
 files <- list.files(
@@ -94,12 +112,44 @@ if (!group_column %in% colnames(meta)) {
   stop("Group column not found in metadata: ", group_column)
 }
 
+meta[[group_column]] <- as.character(meta[[group_column]])
+
 meta <- meta[rownames(meta) %in% file_table$sample, , drop = FALSE]
 file_table <- file_table[file_table$sample %in% rownames(meta), , drop = FALSE]
 
 if (nrow(meta) == 0) {
   stop("No matching samples between metadata and coverage files.")
 }
+
+if (is_blank(group1) || is_blank(group2)) {
+  if (is_blank(group_case)) {
+    stop("Either --group_case or both --group1 and --group2 must be provided.")
+  }
+
+  group_values <- sort(unique(meta[[group_column]]))
+  group_values <- group_values[!is.na(group_values) & nzchar(group_values)]
+
+  if (!group_case %in% group_values) {
+    stop("group_case not found in metadata column ", group_column, ": ", group_case)
+  }
+
+  control_groups <- setdiff(group_values, group_case)
+  if (length(control_groups) != 1) {
+    stop(
+      "DSS currently requires exactly two groups when using --group_case. Found groups: ",
+      paste(group_values, collapse = ", ")
+    )
+  }
+
+  group1 <- control_groups[[1]]
+  group2 <- group_case
+}
+
+sanitize_label <- function(x) {
+  gsub("[^A-Za-z0-9_.-]+", "_", x)
+}
+
+out_prefix <- paste0(sanitize_label(group1), "_vs_", sanitize_label(group2))
 
 group1_samples <- rownames(meta)[meta[[group_column]] == group1]
 group2_samples <- rownames(meta)[meta[[group_column]] == group2]
@@ -129,10 +179,10 @@ n_group2 <- length(group2_samples)
 
 if (n_group1 == 1 && n_group2 == 1) {
   dss_mode <- "DSS-single"
-  smoothing <- opt$smoothing_single
+  smoothing <- smoothing_single
 } else if (n_group1 >= 2 && n_group2 >= 2) {
   dss_mode <- "DSS-replicate"
-  smoothing <- opt$smoothing_replicates
+  smoothing <- smoothing_replicates
 } else {
   stop(
     "Unsupported DSS design: ",
@@ -171,7 +221,7 @@ convert_bismark_cov <- function(file, min_coverage = 5) {
 bs_list <- lapply(
   file_table$file,
   convert_bismark_cov,
-  min_coverage = opt$min_coverage
+  min_coverage = min_coverage
 )
 
 names(bs_list) <- file_table$sample
@@ -196,11 +246,11 @@ dml_test <- do.call(DMLtest, dml_args)
 
 dmrs <- callDMR(
   dml_test,
-  p.threshold = opt$p_threshold,
-  delta = opt$delta,
-  minlen = opt$minlen,
-  minCG = opt$minCG,
-  dis.merge = opt$dis_merge
+  p.threshold = p_threshold,
+  delta = delta,
+  minlen = minlen,
+  minCG = minCG,
+  dis.merge = dis_merge
 )
 
 dml_file <- paste0(out_prefix, "_", dss_mode, "_DML.tsv")
@@ -239,12 +289,12 @@ run_summary <- data.table(
   group1_samples = paste(group1_samples, collapse = ","),
   group2_samples = paste(group2_samples, collapse = ","),
   smoothing = smoothing,
-  min_coverage = opt$min_coverage,
-  p_threshold = opt$p_threshold,
-  delta = opt$delta,
-  minlen = opt$minlen,
-  minCG = opt$minCG,
-  dis_merge = opt$dis_merge
+  min_coverage = min_coverage,
+  p_threshold = p_threshold,
+  delta = delta,
+  minlen = minlen,
+  minCG = minCG,
+  dis_merge = dis_merge
 )
 
 fwrite(run_summary, summary_file, sep = "\t")
