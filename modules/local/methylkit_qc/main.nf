@@ -1,12 +1,10 @@
 process METHYLKIT_QC {
 
-    //tag "${group_column}_${group_case}"
+    tag "${group_column}_${group_case}"
+    
     container 'docker.io/yussab/methylkit:1.0'
     publishDir "${params.outdir}/methylkit/preprocessing", mode: 'copy'
-
-    cpus { cores }
-    memory '8 GB'
-    time '24h'
+    label 'process_low'
 
     input:
     path covfiles, stageAs: "cov_dir/*"
@@ -14,7 +12,7 @@ process METHYLKIT_QC {
     val group_column
     val group_case
     val assembly
-    val cores
+    //val cores
     val sample_suffix
     val lo_count
     val lo_perc
@@ -39,7 +37,7 @@ process METHYLKIT_QC {
         --group_column ${group_column} \\
         --group_case ${group_case} \\
         --assembly ${assembly} \\
-        --cores ${cores} \\
+        --cores  ${task.cpus} \\
         --lo_count ${lo_count} \\
         --lo_perc ${lo_perc} \\
         --hi_count ${hi_count} \\

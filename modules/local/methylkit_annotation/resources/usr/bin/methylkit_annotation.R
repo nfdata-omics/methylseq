@@ -70,7 +70,7 @@ gene_part_df <- data.frame(
 
 write.table(
   gene_part_df,
-  "cpg_gene_parts.tsv",
+  paste0(out_prefix, "_cpg_gene_parts.tsv"),
   sep = "\t",
   row.names = FALSE,
   quote = FALSE
@@ -126,7 +126,7 @@ cpg_context_df <- data.frame(
 
 write.table(
   cpg_context_df,
-  "cpg_context.tsv",
+  paste0(out_prefix, "_cpg_context.tsv"),
   sep = "\t",
   row.names = FALSE,
   quote = FALSE

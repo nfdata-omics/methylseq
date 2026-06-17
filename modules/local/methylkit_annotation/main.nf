@@ -1,15 +1,13 @@
 process METHYLKIT_ANNOTATION {
 
-    //tag "${meta_id}"
+    tag "${comparison_id}"
+
     container 'docker.io/yussab/methylkit:1.0'
     publishDir "${params.outdir}/methylkit/annotation", mode: 'copy'
-
-    //cpus { cores }
-    memory '8 GB'
-    time '24h'
+    label 'process_low'
 
     input:
-    path dmr_tsv
+    tuple val(comparison_id), path (dmr_tsv)
     path refseq_bed 
     path cpg_bed 
 
@@ -23,6 +21,6 @@ process METHYLKIT_ANNOTATION {
         --dmr_tsv    ${dmr_tsv} \\
         --refseq_bed ${refseq_bed} \\
         --cpg_bed    ${cpg_bed} \\
-        --out_prefix methylkit
+        --out_prefix ${comparison_id}
     """
 }
