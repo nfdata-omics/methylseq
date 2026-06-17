@@ -6,7 +6,7 @@ process METHYLKIT_DMA {
     publishDir "${params.outdir}/methylkit/dma", mode: 'copy'
 
     cpus { cores }
-    memory '8 GB'
+    memory '32 GB'
     time '24h'
 
     input:
@@ -38,6 +38,7 @@ process METHYLKIT_DMA {
     --diff_cutoff  ${diff_cutoff} \\
     --qvalue_cutoff  ${qvalue_cutoff} \\
     --overdispersion ${overdispersion} \\
-    --adjust ${adjust}
+    --adjust ${adjust} \\
+    --cores ${cores}
     """
 }
