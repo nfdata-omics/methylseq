@@ -431,6 +431,37 @@
             },
             "fa_icon": "far fa-circle"
         },
+        "differential_methylation_options": {
+            "title": "Differential methylation options",
+            "type": "object",
+            "description": "Options for downstream differential methylation methods.",
+            "default": "",
+            "properties": {
+                "differential_analysis_methods": {
+                    "type": "string",
+                    "default": "methylkit",
+                    "description": "Differential methylation method selector.",
+                    "help_text": "Comma-separated list of differential methylation methods to run. Implemented values: `methylkit`, `dss`. Use `all` to run all currently implemented methods.",
+                    "fa_icon": "fas fa-code-branch"
+                },
+                "methylkit": {
+                    "type": "boolean",
+                    "description": "Legacy alias to run the methylKit differential methylation workflow.",
+                    "hidden": true
+                },
+                "dss": {
+                    "type": "boolean",
+                    "description": "Legacy alias to run the DSS differential methylation workflow.",
+                    "hidden": true
+                },
+                "dmr_detector": {
+                    "type": "boolean",
+                    "description": "Legacy alias reserved for a future DMR detector workflow.",
+                    "hidden": true
+                }
+            },
+            "fa_icon": "fas fa-code-branch"
+        },
         "bwamem_options": {
             "title": "bwa-mem pipeline options for rastair",
             "type": "object",
@@ -740,6 +771,9 @@
         },
         {
             "$ref": "#/$defs/methyldackel_options"
+        },
+        {
+            "$ref": "#/$defs/differential_methylation_options"
         },
         {
             "$ref": "#/$defs/bwamem_options"

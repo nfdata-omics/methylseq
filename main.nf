@@ -103,25 +103,23 @@ workflow NFCORE_METHYLSEQ {
         ch_versions = ch_versions.mix(METHYLSEQ.out.versions)
 
         if (params.advanced_analysis) {
-
-        DIFFERENTIAL_METHYLATION_ANALYSIS (
-                    ch_versions,
-                    METHYLSEQ.out.methylation_coverage,
-                    metadata
-                )
-
-            }
+            DIFFERENTIAL_METHYLATION_ANALYSIS (
+                ch_versions,
+                METHYLSEQ.out.methylation_coverage,
+                metadata
+            )
+        }
 
     }
 
     // --- Branch per DIFFERENTIAL_METHYLATION_ANALYSIS ---
-    if (params.advanced_analysis) {
+    else if (params.advanced_analysis) {
 
-               DIFFERENTIAL_METHYLATION_ANALYSIS (
-                    ch_versions,
-                    samplesheet,
-                    metadata
-                )
+        DIFFERENTIAL_METHYLATION_ANALYSIS (
+            ch_versions,
+            samplesheet,
+            metadata
+        )
     
     }
  
