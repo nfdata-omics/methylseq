@@ -77,45 +77,72 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
 
     log.info "Differential methylation method(s): ${selected_methods.join(', ')}"
 
-    /*ch_cov_dir
-        .map { it ->
-            "My values are:\n$it\n"
-        }
-        .collectFile(
-            name: 'ch_cov_dir.txt',
-            storeDir: '.',
-            keepHeader: true,
-            skip: 1
-        )*/
+
+    //DEV-START
+    if (params.comparisons) {
+
+        comparison_ch = Channel
+            .fromPath(params.comparisons)
+            .splitCsv(header: true, sep: '\t')
+            .map { row ->
+                tuple(
+                    row.comparison_id,
+                    row.case_samples.tokenize(','),
+                    row.control_samples.tokenize(',')
+                )
+            }
+
+    } else {
+
+        comparison_ch = makeComparisonChannel(
+            params.metadata,
+            params.group_column,
+            params.group_case,
+            params.comparison_stratify_by
+        )
+
+    }
+
+    /*comparison_ch
+            .map { it ->
+                "My values are:\n$it\n"
+            }
+            .collectFile(
+                name: 'comparison_ch.txt',
+                storeDir: '.',
+                keepHeader: true,
+                skip: 1
+            )*/
+    //DEV-END
+
 
     if (selected_methods.contains('methylkit')) {
 
         //Data preprocessing 
         METHYLKIT_QC(
-            ch_cov_dir,
-            metadata_ch,
-            params.group_column,
-            params.group_case,
-            params.assembly,
-            params.cores,
-            params.sample_suffix,
-            params.lo_count,
-            params.lo_perc,
-            params.hi_count,
-            params.hi_perc,
-            params.destrand,
-            params.min_per_group
+                ch_cov_dir,
+                metadata_ch,
+                params.group_column,
+                params.group_case,
+                params.assembly,
+                params.sample_suffix,
+                params.lo_count,
+                params.lo_perc,
+                params.hi_count,
+                params.hi_perc,
+                params.destrand,
+                params.min_per_group
         )
 
         //Differential Methylation Analysis
         METHYLKIT_DMA(
             METHYLKIT_QC.out.meth_norm_rda ,
             METHYLKIT_QC.out.methylDB_dir , 
+            comparison_ch,
             params.diff_cutoff,
             params.qvalue_cutoff,
             params.overdispersion,  
-            params.adjust,
-            params.cores
+            params.adjust
         )
 
         //Annotation
@@ -133,9 +160,7 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         DSS_DML_DMR (
             ch_cov_dir,
             metadata_ch,
-            params.group_column,
-            params.group_case,
-            params.sample_suffix
+            comparison_ch
         )
     
     }
@@ -169,3 +194,57 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
     THE END
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
+
+def makeComparisonChannel(metadata_file, group_column, group_case, stratify_by) {
+
+    def rows = file(metadata_file)
+        .readLines()
+        .findAll { it.trim() }
+        .with { lines ->
+            def header = lines[0].split(',', -1)*.trim()
+            def sample_col = header[0]
+
+            lines.drop(1).collect { line ->
+                def values = line.split(',', -1)*.trim()
+                [header, values].transpose().collectEntries()
+            }
+        }
+
+    def stratify_cols = stratify_by ?
+        stratify_by.tokenize(',').collect { it.trim() } :
+        []
+
+    def groups = rows.groupBy { row ->
+        stratify_cols.collect { col -> row[col] }.join('__')
+    }
+
+    def comparisons = groups.collect { key, subrows ->
+
+        def case_samples = subrows
+            .findAll { it[group_column] == group_case }
+            .collect { it[rows[0].keySet()[0]] }
+
+        def control_samples = subrows
+            .findAll { it[group_column] != group_case }
+            .collect { it[rows[0].keySet()[0]] }
+
+        if (!case_samples || !control_samples) {
+            return null
+        }
+
+        def control_values = subrows
+            .findAll { it[group_column] != group_case }
+            .collect { it[group_column] }
+            .unique()
+
+        def comparison_id = ([group_case, 'vs', control_values.join('_')] + 
+            (stratify_cols ? key.tokenize('__') : []))
+            .join('_')
+            .replaceAll(/[^A-Za-z0-9_.-]/, '_')
+
+        tuple(comparison_id, case_samples, control_samples)
+
+    }.findAll { it != null }
+
+    return Channel.fromList(comparisons)
+}

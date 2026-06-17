@@ -26,7 +26,10 @@ option_list <- list(
   make_option("--delta", type = "double", default = 0.10),
   make_option("--minlen", type = "integer", default = 20),
   make_option("--minCG", type = "integer", default = 3),
-  make_option("--dis_merge", type = "integer", default = 50)
+  make_option("--dis_merge", type = "integer", default = 50),
+  make_option("--comparison_id", type = "character"),
+  make_option("--case_samples", type = "character"),
+  make_option("--control_samples", type = "character")
   #make_option("--out_prefix", type = "character", default = NA)
 )
 
@@ -79,8 +82,8 @@ smoothing_span <- if (is.na(smoothing_span)) NULL else smoothing_span
 
 stopifnot(
   dir.exists(cov_dir),
-  file.exists(metadata),
-  !is_blank(group_column)
+  file.exists(metadata)#,
+  #!is_blank(group_column)
 )
 
 files <- list.files(
@@ -108,11 +111,19 @@ meta <- read.delim(
   sep = sep
 )
 
-if (!group_column %in% colnames(meta)) {
-  stop("Group column not found in metadata: ", group_column)
-}
+#if (!group_column %in% colnames(meta)) {
+#  stop("Group column not found in metadata: ", group_column)
+#}
 
-meta[[group_column]] <- as.character(meta[[group_column]])
+#meta[[group_column]] <- as.character(meta[[group_column]])
+
+if (!is_blank(group_column)) {
+  if (!group_column %in% colnames(meta)) {
+    stop("Group column not found in metadata: ", group_column)
+  }
+
+  meta[[group_column]] <- as.character(meta[[group_column]])
+}
 
 meta <- meta[rownames(meta) %in% file_table$sample, , drop = FALSE]
 file_table <- file_table[file_table$sample %in% rownames(meta), , drop = FALSE]
@@ -121,38 +132,28 @@ if (nrow(meta) == 0) {
   stop("No matching samples between metadata and coverage files.")
 }
 
-if (is_blank(group1) || is_blank(group2)) {
-  if (is_blank(group_case)) {
-    stop("Either --group_case or both --group1 and --group2 must be provided.")
-  }
+###########################
+comparison_id <- opt$comparison_id
+case_samples <- strsplit(opt$case_samples, ",")[[1]]
+control_samples <- strsplit(opt$control_samples, ",")[[1]]
 
-  group_values <- sort(unique(meta[[group_column]]))
-  group_values <- group_values[!is.na(group_values) & nzchar(group_values)]
-
-  if (!group_case %in% group_values) {
-    stop("group_case not found in metadata column ", group_column, ": ", group_case)
-  }
-
-  control_groups <- setdiff(group_values, group_case)
-  if (length(control_groups) != 1) {
-    stop(
-      "DSS currently requires exactly two groups when using --group_case. Found groups: ",
-      paste(group_values, collapse = ", ")
-    )
-  }
-
-  group1 <- control_groups[[1]]
-  group2 <- group_case
-}
+case_samples <- case_samples[nzchar(case_samples)]
+control_samples <- control_samples[nzchar(control_samples)]
 
 sanitize_label <- function(x) {
   gsub("[^A-Za-z0-9_.-]+", "_", x)
 }
 
-out_prefix <- paste0(sanitize_label(group1), "_vs_", sanitize_label(group2))
+out_prefix <- sanitize_label(comparison_id)
 
-group1_samples <- rownames(meta)[meta[[group_column]] == group1]
-group2_samples <- rownames(meta)[meta[[group_column]] == group2]
+group1 <- "control"
+group2 <- "case"
+
+group1_samples <- control_samples
+group2_samples <- case_samples
+
+###########################
+
 
 if (length(group1_samples) == 0) {
   stop("No samples found for group1: ", group1)

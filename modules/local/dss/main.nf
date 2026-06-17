@@ -1,22 +1,16 @@
 process DSS_DML_DMR {
 
+    tag "${comparison_id}"
+
     container 'docker.io/yussab/dss:1.0-amd64'
     publishDir "${params.outdir}/dss", mode: 'copy'
-
-    //cpus { cores }
-    memory '8 GB'
-    time '6h'
+    label 'process_medium'
 
     input:
     path covfiles, stageAs: "cov_dir/*"
     path metadata
-    val group_column
-    val group_case
-    //val group1
-    //val group2
-    //*val group_case*
-    //val cores
-    val sample_suffix
+
+    tuple val(comparison_id), val(case_samples), val(control_samples)
 
     //val pattern
     /*val sep
@@ -31,10 +25,10 @@ process DSS_DML_DMR {
     val dis_merge*/
 
     output:
-    path("*_DML.tsv"),     emit: dml
-    path("*_DMR.tsv"),     emit: dmr
-    path("*_summary.tsv"), emit: summary
-    path("*_objects.rda"), emit: rda
+    tuple val(comparison_id), path("*_DML.tsv"),     emit: dml
+    tuple val(comparison_id), path("*_DMR.tsv"),     emit: dmr
+    tuple val(comparison_id), path("*_summary.tsv"), emit: summary
+    tuple val(comparison_id), path("*_objects.rda"), emit: rda
 
     script:
     //def smoothing_span_arg = smoothing_span == null || smoothing_span == 'NA'
@@ -45,8 +39,9 @@ process DSS_DML_DMR {
     dss.R \\
         --cov_dir cov_dir \\
         --metadata ${metadata} \\
-        --sample_suffix ${sample_suffix} \\
-        --group_column ${group_column} \\
-        --group_case ${group_case}
+        --sample_suffix ${comparison_id} \\
+        --comparison_id '${comparison_id}' \\
+        --case_samples '${case_samples.join(",")}' \\
+        --control_samples '${control_samples.join(",")}'
     """
 }

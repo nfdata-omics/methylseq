@@ -14,7 +14,10 @@ option_list = list(
   make_option("--overdispersion", type="character", default="MN", help="Overdispersion model for calculateDiffMeth"),
   make_option("--adjust", type="character", default="BH", help="Multiple testing correction method"),
   make_option("--test", type="character", default="Chisq", help="Statistical test for calculateDiffMeth"),
-  make_option("--cores", type="integer", default=1, help="Number of cores for methylKit")
+  make_option("--cores", type="integer", default=1, help="Number of cores for methylKit"),
+  make_option("--comparison_id", type="character"),
+  make_option("--case_samples", type="character"),
+  make_option("--control_samples", type="character")
 )
 
 opt = parse_args(OptionParser(option_list=option_list))
@@ -66,6 +69,48 @@ if (!file.exists(dbpath)) {
 }
 methData.unite@dbpath <- dbpath
 
+
+############################DEV-START
+
+comparison_id <- opt$comparison_id
+case_samples <- strsplit(opt$case_samples, ",")[[1]]
+control_samples <- strsplit(opt$control_samples, ",")[[1]]
+
+wanted_samples <- c(control_samples, case_samples)
+
+if (!exists("meta")) {
+  stop("Expected object 'meta' was not found in ", meth_rda)
+}
+
+if (!all(wanted_samples %in% rownames(meta))) {
+  stop(
+    "Some comparison samples are missing from metadata: ",
+    paste(setdiff(wanted_samples, rownames(meta)), collapse = ", ")
+  )
+}
+
+sample_order <- rownames(meta)
+comparison_sample_ids <- sample_order[sample_order %in% wanted_samples]
+
+comparison_treatment <- ifelse(
+  comparison_sample_ids %in% case_samples,
+  1,
+  0
+)
+
+methData.unite <- reorganize(
+  methData.unite,
+  sample.ids = comparison_sample_ids,
+  treatment = comparison_treatment
+)
+
+message("Running comparison: ", comparison_id)
+message("Case samples: ", paste(case_samples, collapse = ", "))
+message("Control samples: ", paste(control_samples, collapse = ", "))
+
+############################DEV-END
+
+
 # Differential methylation
 myDiff <- calculateDiffMeth(methData.unite,
                             overdispersion = overdispersion,
@@ -78,7 +123,7 @@ myDiff_df <- getData(myDiff)
 # Save tables
 write.table(
   myDiff_df,
-  file = "myDiff_df.tsv",
+  file = paste0(comparison_id, "_diffmeth_raw.tsv") ,
   sep = "\t",
   quote = FALSE,
   row.names = FALSE
@@ -94,7 +139,7 @@ write.table(
 #dev.off()
 
 # Differential methylation per chromosome
-pdf( "diffMeth_per_chr.pdf")
+pdf( paste0(comparison_id, "_diffmeth_per_chr.pdf") )
 diffMethPerChr(myDiff)
 dev.off()
 
@@ -116,9 +161,9 @@ myDiff25p.hypo_df <- order_by_qvalue(getData(myDiff.hypo))
 myDiff.all_df <- order_by_qvalue(getData(myDiff.all))
 
 # Save results as TSV
-write.table(myDiff25p.hyper_df, file =  "diffMeth_hyper.tsv", sep="\t", row.names = FALSE, quote = FALSE)
-write.table(myDiff25p.hypo_df,  file =  "diffMeth_hypo.tsv", sep="\t", row.names = FALSE, quote = FALSE)
-write.table(myDiff.all_df,   file =  "diffMeth_all.tsv", sep="\t", row.names = FALSE, quote = FALSE)
+write.table(myDiff25p.hyper_df, file =  paste0(comparison_id,"_diffmeth_hyper.tsv"), sep="\t", row.names = FALSE, quote = FALSE)
+write.table(myDiff25p.hypo_df,  file =  paste0(comparison_id,"_diffmeth_hypo.tsv"), sep="\t", row.names = FALSE, quote = FALSE)
+write.table(myDiff.all_df,   file =  paste0(comparison_id,"_diffmeth_all.tsv"), sep="\t", row.names = FALSE, quote = FALSE)
 
 
 chromosome_counts <- function(df, min_freq = NULL) {
@@ -173,7 +218,7 @@ p2 <- plot_chr_counts(chr_counts_hyper, "Chromosome frequencies - Hyper-methylat
 chr_counts_hypo <- chromosome_counts(myDiff25p.hypo_df)
 p3 <- plot_chr_counts(chr_counts_hypo, "Chromosome frequencies - Hypo-methylated positions")
 
-pdf("chromosome_distributions.pdf")
+pdf(paste0(comparison_id, "_chromosome_distributions.pdf"))
 plot(p)
 plot(p1)
 plot(p2)
