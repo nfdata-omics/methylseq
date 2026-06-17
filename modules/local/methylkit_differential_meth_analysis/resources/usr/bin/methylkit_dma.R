@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({
   library(optparse)
   library(methylKit)
+  library(ggplot2)
 })
 
 option_list = list(
@@ -11,7 +12,9 @@ option_list = list(
   make_option("--diff_cutoff", type="numeric", default=25, help="Methylation difference cutoff"),
   make_option("--qvalue_cutoff", type="numeric", default=0.01, help="Q-value cutoff for significance"),
   make_option("--overdispersion", type="character", default="MN", help="Overdispersion model for calculateDiffMeth"),
-  make_option("--adjust", type="character", default="BH", help="Multiple testing correction method")
+  make_option("--adjust", type="character", default="BH", help="Multiple testing correction method"),
+  make_option("--test", type="character", default="Chisq", help="Statistical test for calculateDiffMeth"),
+  make_option("--cores", type="integer", default=1, help="Number of cores for methylKit")
 )
 
 opt = parse_args(OptionParser(option_list=option_list))
@@ -22,6 +25,20 @@ diff_cutoff <- opt$diff_cutoff
 qvalue_cutoff <- opt$qvalue_cutoff
 overdispersion <- opt$overdispersion
 adjust <- opt$adjust
+test <- opt$test
+cores <- opt$cores
+
+overdispersion <- match.arg(overdispersion, c("none", "MN", "shrinkMN"))
+adjust <- match.arg(adjust, c("SLIM", "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none", "qvalue"))
+test <- match.arg(test, c("F", "Chisq", "fast.fisher", "midPval"))
+
+if (test == "F" && overdispersion %in% c("MN", "shrinkMN")) {
+  message(
+    "Using test='F' with overdispersion='", overdispersion,
+    "' can fail in methylKit when a locus has too few non-missing samples. ",
+    "Use --test Chisq if this run hits 'argument is of length zero'."
+  )
+}
 
 #DEBUG
 #meth_rda <- opt$meth_rda
@@ -36,17 +53,25 @@ stopifnot(file.exists(meth_rda))
 
 
 # Load merged methylation data
-load(meth_rda) # assumes 'meth' object is loaded
+load(meth_rda) # assumes 'methData.unite' object is loaded
+
+if (!exists("methData.unite")) {
+  stop("Expected object 'methData.unite' was not found in ", meth_rda)
+}
 
 # Fix absolute DB paths
-dbpath <- meth@dbpath 
-dbpath <- paste( "./methylDB_dir/methylDB/" , basename(dbpath), sep="")
-meth@dbpath <- dbpath
+dbpath <- file.path("methylDB_dir", "methylDB", basename(methData.unite@dbpath))
+if (!file.exists(dbpath)) {
+  stop("Expected staged methylKit DB file was not found: ", dbpath)
+}
+methData.unite@dbpath <- dbpath
 
 # Differential methylation
 myDiff <- calculateDiffMeth(methData.unite,
                             overdispersion = overdispersion,
-                            adjust = adjust)
+                            adjust = adjust,
+                            test = test,
+                            mc.cores = cores)
 
 myDiff_df <- getData(myDiff)
 
@@ -79,14 +104,16 @@ myDiff.hypo  <- getMethylDiff(myDiff, difference = diff_cutoff, qvalue = qvalue_
 myDiff.all   <- getMethylDiff(myDiff, difference = diff_cutoff, qvalue = qvalue_cutoff)
 
 # Order by qvalue
-myDiff25p.hyper_df <- getData(myDiff.hyper)
-myDiff25p.hyper_df <- myDiff25p.hyper_df[order(myDiff25p.hyper_df$qvalue), ]
+order_by_qvalue <- function(df) {
+  if (!"qvalue" %in% colnames(df) || nrow(df) == 0) {
+    return(df)
+  }
+  df[order(df$qvalue), , drop = FALSE]
+}
 
-myDiff25p.hypo_df <- getData(myDiff.hypo)
-myDiff25p.hypo_df  <- myDiff25p.hypo_df[order(myDiff25p.hypo_df$qvalue), ]
-
-myDiff.all_df <- getData(myDiff.all)
-myDiff.all_df   <- myDiff.all_df[order(myDiff.all_df$qvalue), ]
+myDiff25p.hyper_df <- order_by_qvalue(getData(myDiff.hyper))
+myDiff25p.hypo_df <- order_by_qvalue(getData(myDiff.hypo))
+myDiff.all_df <- order_by_qvalue(getData(myDiff.all))
 
 # Save results as TSV
 write.table(myDiff25p.hyper_df, file =  "diffMeth_hyper.tsv", sep="\t", row.names = FALSE, quote = FALSE)
@@ -94,48 +121,57 @@ write.table(myDiff25p.hypo_df,  file =  "diffMeth_hypo.tsv", sep="\t", row.names
 write.table(myDiff.all_df,   file =  "diffMeth_all.tsv", sep="\t", row.names = FALSE, quote = FALSE)
 
 
+chromosome_counts <- function(df, min_freq = NULL) {
+  if (nrow(df) == 0 || !"chr" %in% colnames(df)) {
+    return(data.frame(chr = character(), n = integer(), freq = numeric()))
+  }
+
+  counts <- as.data.frame(table(df$chr), stringsAsFactors = FALSE)
+  colnames(counts) <- c("chr", "n")
+  counts <- counts[counts$n > 0, , drop = FALSE]
+  counts$freq <- counts$n / sum(counts$n)
+
+  if (!is.null(min_freq)) {
+    counts <- counts[counts$freq >= min_freq, , drop = FALSE]
+  }
+
+  counts[order(-counts$n), , drop = FALSE]
+}
+
+plot_chr_counts <- function(counts, title) {
+  if (nrow(counts) == 0) {
+    return(
+      ggplot() +
+        annotate("text", x = 0, y = 0, label = "No loci") +
+        labs(x = "Chromosome", y = "Count", title = title) +
+        theme_minimal() +
+        theme(
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          panel.grid = element_blank()
+        )
+    )
+  }
+
+  ggplot(counts, aes(x = reorder(chr, -n), y = n)) +
+    geom_col() +
+    labs(x = "Chromosome", y = "Count", title = title) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
 # Barplot with positions by chromosomes (only chr with freq > 1%)
-#diff_hyper = myDiff_df[myDiff_df$qvalue<0.05 & myDiff_df$meth.diff>25,]
-#diff_hyper = read.delim("dma/diffMeth_hyper.tsv",h=T)
-#diff_hypo = myDiff_df[myDiff_df$qvalue<0.05 & myDiff_df$meth.diff<(-25),]
-#diff_hypo = read.delim("dma/diffMeth_hypo.tsv",h=T)
-#diff_all = rbind(diff_hyper, diff_hypo)
-#diff_all = diff_all[order(diff_all$qvalue),]
-#diff_all = read.delim("dma/diffMeth_all.tsv",h=T)
+chr_counts <- chromosome_counts(myDiff_df, min_freq = 0.01)
+p <- plot_chr_counts(chr_counts, "Chromosome frequencies (>1% of total)")
 
-chr_counts <- myDiff_df %>%
-  count(chr, name="n") %>%
-  mutate(freq=n/sum(n)) %>%
-  filter(freq>=0.01) %>%
-  arrange(desc(n))
-p = ggplot(chr_counts, aes(x=reorder(chr,-n), y=n)) +
-  geom_col() +
-  labs(x="Chromosome", y="Count", title="Chromosome frequencies (>1% of total)") +
-  theme_minimal() + theme(axis.text.x=element_text(angle=45, hjust=1))
+chr_counts_sig <- chromosome_counts(myDiff.all_df)
+p1 <- plot_chr_counts(chr_counts_sig, "Chromosome frequencies - Significant positions")
 
-chr_counts_sig <- diff_all %>%
-  count(chr, name="n") %>%
-  arrange(desc(n))
-p1 = ggplot(chr_counts_sig, aes(x=reorder(chr,-n), y=n)) +
-  geom_col() +
-  labs(x="Chromosome", y="Count", title="Chromosome frequencies - Significant positions") +
-  theme_minimal() + theme(axis.text.x=element_text(angle=45, hjust=1))
+chr_counts_hyper <- chromosome_counts(myDiff25p.hyper_df)
+p2 <- plot_chr_counts(chr_counts_hyper, "Chromosome frequencies - Hyper-methylated positions")
 
-chr_counts_hyper <- diff_hyper %>%
-  count(chr, name="n") %>%
-  arrange(desc(n))
-p2 = ggplot(chr_counts_hyper, aes(x=reorder(chr,-n), y=n)) +
-  geom_col() +
-  labs(x="Chromosome", y="Count", title="Chromosome frequencies - Hyper-methylated positions") +
-  theme_minimal() + theme(axis.text.x=element_text(angle=45, hjust=1))
-
-chr_counts_hypo <- diff_hypo %>%
-  count(chr, name="n") %>%
-  arrange(desc(n))
-p3 = ggplot(chr_counts_hypo, aes(x=reorder(chr,-n), y=n)) +
-  geom_col() +
-  labs(x="Chromosome", y="Count", title="Chromosome frequencies - Hypo-methylated positions") +
-  theme_minimal() + theme(axis.text.x=element_text(angle=45, hjust=1))
+chr_counts_hypo <- chromosome_counts(myDiff25p.hypo_df)
+p3 <- plot_chr_counts(chr_counts_hypo, "Chromosome frequencies - Hypo-methylated positions")
 
 pdf("chromosome_distributions.pdf")
 plot(p)
