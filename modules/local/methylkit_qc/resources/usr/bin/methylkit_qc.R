@@ -227,6 +227,8 @@ common_sites <- nrow(getData(methData.unite))
 
 library(scales)
 
+min_per_group_label <- if (is.null(min_per_group)) "All samples" else as.character(min_per_group)
+
 p <- ggplot(cov_df, aes(x = sample, y = covered_sites)) +
   geom_col(fill = "steelblue") +
   geom_hline(
@@ -238,8 +240,8 @@ p <- ggplot(cov_df, aes(x = sample, y = covered_sites)) +
   theme_light() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(
-    title = paste0("CpG site coverage per sample (Replicate requirement : ", min_per_group,  ")"),
-    subtitle = paste0("Horizontal line = common CpG sites used for PCA (", common_sites, ")"),
+    title = paste0("CpG site coverage per sample"),
+    subtitle = paste0("Horizontal line shows common CpG sites used for PCA (", common_sites, ") - Replicate requirement : ", min_per_group_label,),
     x = "Sample",
     y = "Number of CpG sites"
   )

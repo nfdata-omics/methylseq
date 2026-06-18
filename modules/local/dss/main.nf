@@ -12,6 +12,8 @@ process DSS_DML_DMR {
 
     tuple val(comparison_id), val(case_samples), val(control_samples)
 
+    val sample_suffix
+
     //val pattern
     /*val sep
     val min_coverage
@@ -39,7 +41,7 @@ process DSS_DML_DMR {
     dss.R \\
         --cov_dir cov_dir \\
         --metadata ${metadata} \\
-        --sample_suffix ${comparison_id} \\
+        --sample_suffix ${sample_suffix} \\
         --comparison_id '${comparison_id}' \\
         --case_samples '${case_samples.join(",")}' \\
         --control_samples '${control_samples.join(",")}'

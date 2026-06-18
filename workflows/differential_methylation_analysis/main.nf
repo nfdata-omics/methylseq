@@ -160,7 +160,8 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         DSS_DML_DMR (
             ch_cov_dir,
             metadata_ch,
-            comparison_ch
+            comparison_ch,
+            params.sample_suffix
         )
     
     }
