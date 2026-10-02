@@ -32,22 +32,9 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         .collect()  // Collect all files to a single directory
         .set { ch_cov_dir }
 
-    def legacy_methods = []
-    if (params.methylkit) {
-        legacy_methods << 'methylkit'
-    }
-    if (params.dss) {
-        legacy_methods << 'dss'
-    }
-    if (params.dmr_detector) {
-        legacy_methods << 'dmr_detector'
-    }
-
-    def selected_methods = legacy_methods ?: (
-        params.differential_analysis_methods instanceof Collection
-            ? params.differential_analysis_methods
-            : params.differential_analysis_methods.toString().tokenize(',')
-    )
+    def selected_methods = params.differential_analysis_methods instanceof Collection
+        ? params.differential_analysis_methods
+        : params.differential_analysis_methods.toString().tokenize(',')
 
     selected_methods = selected_methods
         .collect { it.toString().trim().toLowerCase().replace('-', '_') }
@@ -55,24 +42,18 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         .unique()
 
     if (selected_methods.contains('all')) {
-        selected_methods = ['methylkit', 'dss']
+        selected_methods = ['methylkit', 'dss', 'dmr_detector']
     }
 
     def supported_methods = ['methylkit', 'dss', 'dmr_detector']
-    def implemented_methods = ['methylkit', 'dss']
     def unknown_methods = selected_methods.findAll { !supported_methods.contains(it) }
-    def unavailable_methods = selected_methods.findAll { !implemented_methods.contains(it) }
 
     if (!selected_methods) {
-        error "No differential methylation method selected. Set --differential_analysis_methods methylkit,dss"
+        error "No differential methylation method selected. Set --differential_analysis_methods methylkit,dss,dmr_detector"
     }
 
     if (unknown_methods) {
         error "Unsupported differential methylation method(s): ${unknown_methods.join(', ')}. Supported values: ${supported_methods.join(', ')}"
-    }
-
-    if (unavailable_methods) {
-        error "Differential methylation method(s) not implemented yet: ${unavailable_methods.join(', ')}"
     }
 
     log.info "Differential methylation method(s): ${selected_methods.join(', ')}"
@@ -103,7 +84,7 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
 
     }
 
-    /*comparison_ch
+    comparison_ch
             .map { it ->
                 "My values are:\n$it\n"
             }
@@ -112,7 +93,7 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
                 storeDir: '.',
                 keepHeader: true,
                 skip: 1
-            )*/
+            )
     //DEV-END
 
 
@@ -215,6 +196,11 @@ def makeComparisonChannel(metadata_file, group_column, group_case, stratify_by) 
         stratify_by.tokenize(',').collect { it.trim() } :
         []
 
+    def missing_cols = ([group_column] + stratify_cols).findAll { col -> !rows[0].containsKey(col) }
+    if (missing_cols) {
+        error "Metadata column(s) not found: ${missing_cols.join(', ')}"
+    }
+
     def groups = rows.groupBy { row ->
         stratify_cols.collect { col -> row[col] }.join('__')
     }
@@ -238,10 +224,11 @@ def makeComparisonChannel(metadata_file, group_column, group_case, stratify_by) 
             .collect { it[group_column] }
             .unique()
 
-        def comparison_id = ([group_case, 'vs', control_values.join('_')] + 
-            (stratify_cols ? key.tokenize('__') : []))
-            .join('_')
-            .replaceAll(/[^A-Za-z0-9_.-]/, '_')
+        def comparison_id = stratify_cols ?
+            key.tokenize('__').join('_') :
+            [group_case, 'vs', control_values.join('_')].join('_')
+
+        comparison_id = comparison_id.replaceAll(/[^A-Za-z0-9_.-]/, '_')
 
         tuple(comparison_id, case_samples, control_samples)
 
