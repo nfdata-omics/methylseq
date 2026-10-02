@@ -210,6 +210,7 @@ class DMRmanager():
     test_col  = None
     ctrl_col  = None
     diff_col  = None
+    delimiter = ','
 
     def init(self, configfile):
         sys.stderr.write(f'Reading config file {configfile}...\n')
@@ -262,7 +263,7 @@ class DMRmanager():
             d.open()
 
         with open(infile, "rt") as f:
-            c = csv.reader(f)
+            c = csv.reader(f, delimiter=self.delimiter)
             next(c)
             for row in c:
                 if self.diff_col:
@@ -289,12 +290,28 @@ The input file should be comma-delimited (or tab-delimited if --tab is specified
     parser.add_argument("infile", help="File containing methylation data.")
     parser.add_argument("--test_col", type=int, default=None, help="Column containing methylation values for test sample (1-based)")
     parser.add_argument("--ctrl_col", type=int, default=None, help="Column containing methylation values for control sample (1-based)")
+    parser.add_argument("--test_sample", default=None, help="Column name containing methylation values for test sample")
+    parser.add_argument("--ctrl_sample", default=None, help="Column name containing methylation values for control sample")
     parser.add_argument("--diff_col", type=int, default=None, help="Column containing differential methylation values (1-based)")
     parser.add_argument("--tab", action="store_true", help="If specified, input file is tab-delimited instead of comma-delimited.")
     args = parser.parse_args()
 
     M = DMRmanager()
-    if args.diff_col:
+    M.delimiter = '\t' if args.tab else ','
+
+    if args.test_sample or args.ctrl_sample:
+        if not (args.test_sample and args.ctrl_sample):
+            sys.stderr.write("Error: please specify both --test_sample and --ctrl_sample.\n")
+            sys.exit(1)
+        with open(args.infile, "rt") as f:
+            header = next(csv.reader(f, delimiter=M.delimiter))
+        try:
+            M.test_col = header.index(args.test_sample)
+            M.ctrl_col = header.index(args.ctrl_sample)
+        except ValueError as e:
+            sys.stderr.write(f"Error: sample column not found in input header: {e}\n")
+            sys.exit(1)
+    elif args.diff_col:
         M.diff_col = args.diff_col - 1
     elif args.test_col and args.ctrl_col:
         M.test_col = args.test_col - 1
