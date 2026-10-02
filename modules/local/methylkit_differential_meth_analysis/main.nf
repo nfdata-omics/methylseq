@@ -3,7 +3,8 @@ process METHYLKIT_DMA {
     tag "${comparison_id}"
 
     container 'docker.io/yussab/methylkit:1.0'
-    publishDir "${params.outdir}/methylkit/dma", mode: 'copy'
+    publishDir "${params.outdir}/methylkit/dma/${comparison_id}", mode: 'copy'
+    stageInMode 'copy'
     label 'process_low'
 
     input:

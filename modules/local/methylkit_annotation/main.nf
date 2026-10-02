@@ -3,7 +3,7 @@ process METHYLKIT_ANNOTATION {
     tag "${comparison_id}"
 
     container 'docker.io/yussab/methylkit:1.0'
-    publishDir "${params.outdir}/methylkit/annotation", mode: 'copy'
+    publishDir "${params.outdir}/methylkit/annotation/${comparison_id}", mode: 'copy'
     label 'process_low'
 
     input:
@@ -12,8 +12,8 @@ process METHYLKIT_ANNOTATION {
     path cpg_bed 
 
     output:
-    path "*.tsv"
-    path "*.pdf"
+    tuple val(comparison_id), path("*.tsv"), emit: tsv
+    tuple val(comparison_id), path("*.pdf"), emit: pdf
 
     script:
     """
