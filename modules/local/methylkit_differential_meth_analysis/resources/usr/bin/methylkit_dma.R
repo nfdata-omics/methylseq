@@ -73,8 +73,15 @@ methData.unite@dbpath <- dbpath
 ############################DEV-START
 
 comparison_id <- opt$comparison_id
-case_samples <- strsplit(opt$case_samples, ",")[[1]]
-control_samples <- strsplit(opt$control_samples, ",")[[1]]
+case_samples <- trimws(strsplit(opt$case_samples, ",")[[1]])
+control_samples <- trimws(strsplit(opt$control_samples, ",")[[1]])
+
+case_samples <- case_samples[nzchar(case_samples)]
+control_samples <- control_samples[nzchar(control_samples)]
+
+if (length(case_samples) == 0 || length(control_samples) == 0) {
+  stop("Comparison ", comparison_id, " must include at least one case sample and one control sample")
+}
 
 wanted_samples <- c(control_samples, case_samples)
 

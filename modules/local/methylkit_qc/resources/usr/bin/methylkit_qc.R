@@ -75,7 +75,7 @@ files_list = list.files(
 
 meta = read.delim(metadata, row.names = 1, check.names = FALSE, sep = ",")
 
-sample_ids = sub(sample_suffix, "", basename(files_list))
+sample_ids = sub(sample_suffix, "", basename(files_list), fixed = TRUE)
 files_list = files_list[sample_ids %in% rownames(meta)]
 sample_ids = sample_ids[sample_ids %in% rownames(meta)]
 
@@ -241,7 +241,7 @@ p <- ggplot(cov_df, aes(x = sample, y = covered_sites)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(
     title = paste0("CpG site coverage per sample"),
-    subtitle = paste0("Horizontal line shows common CpG sites used for PCA (", common_sites, ") - Replicate requirement : ", min_per_group_label,),
+    subtitle = paste0("Horizontal line shows common CpG sites used for PCA (", common_sites, ") - Replicate requirement : ", min_per_group_label),
     x = "Sample",
     y = "Number of CpG sites"
   )
@@ -251,7 +251,6 @@ p <- ggplot(cov_df, aes(x = sample, y = covered_sites)) +
 # Così si capisce se nella definizione dello unite il contributo dei diversi samples è stato bilanciato o no
 
 ggsave("covered_sites.pdf", p, width=8, height=5)
-dev.off()
 
 ###  Clustering (Extra)
 pdf("clustering_dendrogram.pdf")
