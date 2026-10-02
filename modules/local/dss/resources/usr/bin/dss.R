@@ -134,8 +134,8 @@ if (nrow(meta) == 0) {
 
 ###########################
 comparison_id <- opt$comparison_id
-case_samples <- strsplit(opt$case_samples, ",")[[1]]
-control_samples <- strsplit(opt$control_samples, ",")[[1]]
+case_samples <- trimws(strsplit(opt$case_samples, ",")[[1]])
+control_samples <- trimws(strsplit(opt$control_samples, ",")[[1]])
 
 case_samples <- case_samples[nzchar(case_samples)]
 control_samples <- control_samples[nzchar(control_samples)]
@@ -171,8 +171,9 @@ file_table <- file_table[
   drop = FALSE
 ]
 
-if (any(is.na(file_table$file))) {
-  stop("Missing coverage files for selected samples.")
+missing_samples <- selected_samples[is.na(file_table$file)]
+if (length(missing_samples) > 0) {
+  stop("Missing coverage files for selected samples: ", paste(missing_samples, collapse = ", "))
 }
 
 n_group1 <- length(group1_samples)
