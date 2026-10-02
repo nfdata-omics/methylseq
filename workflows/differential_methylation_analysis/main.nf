@@ -96,6 +96,7 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
             )
     //DEV-END
 
+    annotation_input_ch = Channel.empty()
 
     if (selected_methods.contains('methylkit')) {
 
@@ -126,11 +127,10 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
             params.adjust
         )
 
-        //Annotation
-        METHYLKIT_ANNOTATION (
-            METHYLKIT_DMA.out.diff_meth_all ,
-            params.refseq_bed,
-            params.cpg_bed
+        annotation_input_ch = annotation_input_ch.mix(
+            METHYLKIT_DMA.out.diff_meth_all.map { comparison_id, diffmeth_tsv ->
+                tuple('methylkit', comparison_id, 'DMC', diffmeth_tsv)
+            }
         )
 
     }
@@ -144,6 +144,15 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
             comparison_ch,
             params.sample_suffix
         )
+
+        annotation_input_ch = annotation_input_ch.mix(
+            DSS_DML_DMR.out.dml.map { comparison_id, diffmeth_tsv ->
+                tuple('dss', comparison_id, 'DML', diffmeth_tsv)
+            },
+            DSS_DML_DMR.out.dmr.map { comparison_id, diffmeth_tsv ->
+                tuple('dss', comparison_id, 'DMR', diffmeth_tsv)
+            }
+        )
     
     }
 
@@ -152,6 +161,17 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
         //Aggiungere modulo script Alberto
         //DMR_DETECTOR ()
     
+    }
+
+    if (selected_methods.contains('methylkit') || selected_methods.contains('dss')) {
+
+        // Shared annotation for caller-specific differential methylation outputs
+        METHYLKIT_ANNOTATION (
+            annotation_input_ch,
+            params.refseq_bed,
+            params.cpg_bed
+        )
+
     }
 
     /*

@@ -81,18 +81,39 @@ harmonize_seqnames <- function(target_chr, feature_chr, feature_name) {
   candidates[[best_name]]
 }
 
+resolve_column <- function(df, candidates, required = TRUE, fallback = NULL) {
+  matched <- candidates[candidates %in% colnames(df)]
 
-#dmr_df     <- myDiff25p_df
-#refseq_bed <- "/Users/youssef.abili/methylkit/mm10.refseq.genes.bed"
-#cpg_bed    <- "/Users/youssef.abili/methylkit/mm10.cpg.bed.txt"
-#out_prefix <- "out_prefix"
+  if (length(matched) > 0) {
+    return(matched[[1]])
+  }
 
-# -----------------------------
-# Load DMCs
-# -----------------------------
-dmr_df <- read.delim(dmr_tsv)
+  lower_names <- tolower(colnames(df))
+  lower_candidates <- tolower(candidates)
+  lower_match <- match(lower_candidates, lower_names, nomatch = 0)
+  lower_match <- lower_match[lower_match > 0]
 
-if (nrow(dmr_df) == 0) {
+  if (length(lower_match) > 0) {
+    return(colnames(df)[lower_match[[1]]])
+  }
+
+  if (!is.null(fallback)) {
+    return(fallback)
+  }
+
+  if (required) {
+    stop(
+      "Cannot resolve required column. Tried: ",
+      paste(candidates, collapse = ", "),
+      ". Available columns: ",
+      paste(colnames(df), collapse = ", ")
+    )
+  }
+
+  NULL
+}
+
+write_empty_annotation <- function(out_prefix) {
   empty_df <- data.frame()
   write.table(
     empty_df,
@@ -117,17 +138,76 @@ if (nrow(dmr_df) == 0) {
   )
   pdf(paste0(out_prefix, "_gene_parts.pdf"))
   plot.new()
-  title("No significant methylKit loci")
+  title("No significant differential methylation loci")
   dev.off()
   pdf(paste0(out_prefix, "_cpg_context.pdf"))
   plot.new()
-  title("No significant methylKit loci")
+  title("No significant differential methylation loci")
   dev.off()
-  cat("No significant methylKit loci to annotate\n")
+  cat("No significant differential methylation loci to annotate\n")
+}
+
+
+#dmr_df     <- myDiff25p_df
+#refseq_bed <- "/Users/youssef.abili/methylkit/mm10.refseq.genes.bed"
+#cpg_bed    <- "/Users/youssef.abili/methylkit/mm10.cpg.bed.txt"
+#out_prefix <- "out_prefix"
+
+# -----------------------------
+# Load DMCs
+# -----------------------------
+if (file.info(dmr_tsv)$size == 0) {
+  write_empty_annotation(out_prefix)
   quit(save = "no", status = 0)
 }
 
-#dmr_df$chr <- paste0("chr", dmr_df$chr)
+dmr_df <- read.delim(dmr_tsv, check.names = FALSE)
+
+if (nrow(dmr_df) == 0) {
+  write_empty_annotation(out_prefix)
+  quit(save = "no", status = 0)
+}
+
+chr_col <- resolve_column(dmr_df, c("chr", "chrom", "chromosome", "seqnames", "seqname"))
+start_col <- resolve_column(dmr_df, c("start", "pos", "position", "chr.pos", "chrPos"))
+end_col <- resolve_column(
+  dmr_df,
+  c("end", "stop", "pos", "position", "chr.pos", "chrPos"),
+  fallback = start_col
+)
+strand_col <- resolve_column(dmr_df, c("strand"), required = FALSE, fallback = NULL)
+
+dmr_df$chr <- as.character(dmr_df[[chr_col]])
+dmr_df$start <- as.integer(dmr_df[[start_col]])
+dmr_df$end <- as.integer(dmr_df[[end_col]])
+
+if (is.null(strand_col)) {
+  dmr_df$strand <- "*"
+} else {
+  dmr_df$strand <- as.character(dmr_df[[strand_col]])
+}
+
+dmr_df <- dmr_df[
+  !is.na(dmr_df$chr) &
+    !is.na(dmr_df$start) &
+    !is.na(dmr_df$end),
+  ,
+  drop = FALSE
+]
+
+if (nrow(dmr_df) == 0) {
+  write_empty_annotation(out_prefix)
+  quit(save = "no", status = 0)
+}
+
+dmr_df$start <- pmax(dmr_df$start, 1L)
+swap_rows <- dmr_df$start > dmr_df$end
+if (any(swap_rows)) {
+  old_start <- dmr_df$start[swap_rows]
+  dmr_df$start[swap_rows] <- dmr_df$end[swap_rows]
+  dmr_df$end[swap_rows] <- old_start
+}
+
 refseq_chr <- read_bed_seqnames(refseq_bed)
 dmr_df$chr <- harmonize_seqnames(dmr_df$chr, refseq_chr, "RefSeq BED")
 

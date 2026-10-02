@@ -3,7 +3,7 @@ process DSS_DML_DMR {
     tag "${comparison_id}"
 
     container 'docker.io/yussab/dss:1.0-amd64'
-    publishDir "${params.outdir}/dss", mode: 'copy'
+    publishDir "${params.outdir}/dss/dma/${comparison_id}", mode: 'copy'
     label 'process_medium'
 
     input:
