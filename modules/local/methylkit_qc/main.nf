@@ -25,6 +25,7 @@ process METHYLKIT_QC {
     
     path("meth_merged_data.rda"), emit: meth_norm_rda
     path("methylDB"),             emit: methylDB_dir
+    path("raw_common_cpg_methylation_table.csv"), emit: raw_common_cpg_methylation_table
     path("*.pdf"),                emit: pdf
     path("*.tsv"),                emit: tsv
 

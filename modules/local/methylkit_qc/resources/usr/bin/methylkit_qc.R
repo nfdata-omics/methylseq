@@ -279,6 +279,31 @@ dev.off()
 
 # Save tables
 normalized_dataset <- getData(methData.unite)
+methylation_percentages <- methylKit::percMethylation(methData.unite)
+
+raw_common_cpg_table <- data.frame(
+  chr = normalized_dataset$chr,
+  start = normalized_dataset$start,
+  end = normalized_dataset$end,
+  stringsAsFactors = FALSE
+)
+
+raw_common_cpg_table <- cbind(
+  raw_common_cpg_table,
+  as.data.frame(methylation_percentages, check.names = FALSE)
+)
+
+raw_common_cpg_table <- raw_common_cpg_table[
+  order(raw_common_cpg_table$chr, raw_common_cpg_table$start),
+  ,
+  drop = FALSE
+]
+
+write.csv(
+  raw_common_cpg_table,
+  "raw_common_cpg_methylation_table.csv",
+  row.names = FALSE
+)
 
 write.table(
       normalized_dataset,
