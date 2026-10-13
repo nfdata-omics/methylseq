@@ -9,7 +9,7 @@ include { METHYLKIT_QC         } from '../../modules/local/methylkit_qc/main.nf'
 include { METHYLKIT_DMA        } from '../../modules/local/methylkit_differential_meth_analysis/main.nf'
 include { METHYLKIT_ANNOTATION } from '../../modules/local/methylkit_annotation/main.nf'
 include { DSS_DML_DMR          } from '../../modules/local/dss/main.nf'
-//include { DMR_DETECTOR         } from '../../modules/local/dmr_detector/main.nf'
+include { DMR_DETECTOR         } from '../../modules/local/dmr_detector/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -97,8 +97,9 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
     //DEV-END
 
     annotation_input_ch = Channel.empty()
+    def run_methylkit_qc = selected_methods.contains('methylkit') || selected_methods.contains('dmr_detector')
 
-    if (selected_methods.contains('methylkit')) {
+    if (run_methylkit_qc) {
 
         //Data preprocessing 
         METHYLKIT_QC(
@@ -115,6 +116,10 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
                 params.destrand,
                 params.min_per_group
         )
+
+    }
+
+    if (selected_methods.contains('methylkit')) {
 
         //Differential Methylation Analysis
         METHYLKIT_DMA(
@@ -157,9 +162,13 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
     }
 
     if (selected_methods.contains('dmr_detector')) {
-    
-        //Aggiungere modulo script Alberto
-        //DMR_DETECTOR ()
+
+        DMR_DETECTOR (
+            file("${projectDir}/modules/local/dmr_detector/resources/usr/bin/dmrs.py"),
+            METHYLKIT_QC.out.raw_common_cpg_methylation_table,
+            file("${projectDir}/modules/local/dmr_detector/resources/usr/bin/config.txt"),
+            comparison_ch
+        )
     
     }
 

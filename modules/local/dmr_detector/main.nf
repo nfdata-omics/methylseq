@@ -2,7 +2,7 @@ process DMR_DETECTOR {
 
     tag "${comparison_id}"
 
-    container 'python:3.12-slim'
+    container 'docker.io/library/python:3.12'
     publishDir "${params.outdir}/dmr_detector/${comparison_id}", mode: 'copy'
     label 'process_medium'
 
