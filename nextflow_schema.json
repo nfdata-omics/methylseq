@@ -385,13 +385,6 @@
                 }
             }
         },
-        "bwameth_options": {
-            "title": "bwa-meth pipeline options",
-            "type": "object",
-            "description": "Parameters specific to BWA Meth aligning steps",
-            "default": "",
-            "properties": {}
-        },
         "methyldackel_options": {
             "title": "MethylDackel options",
             "type": "object",
@@ -461,13 +454,6 @@
                 }
             },
             "fa_icon": "fas fa-code-branch"
-        },
-        "bwamem_options": {
-            "title": "bwa-mem pipeline options for rastair",
-            "type": "object",
-            "description": "Parameters specific to BWA Mem aligning steps",
-            "default": "",
-            "properties": {}
         },
         "rastair_options": {
             "title": "rastair options",
@@ -767,16 +753,10 @@
             "$ref": "#/$defs/bismark_options"
         },
         {
-            "$ref": "#/$defs/bwameth_options"
-        },
-        {
             "$ref": "#/$defs/methyldackel_options"
         },
         {
             "$ref": "#/$defs/differential_methylation_options"
-        },
-        {
-            "$ref": "#/$defs/bwamem_options"
         },
         {
             "$ref": "#/$defs/rastair_options"
@@ -799,5 +779,92 @@
         {
             "$ref": "#/$defs/institutional_config_options"
         }
-    ]
+    ],
+    "properties": {
+        "refseq_bed": {
+            "type": "string",
+            "default": "/facility/nfdata-omics/pipelines/development/methylseq/assets/mm10.refseq.genes.bed"
+        },
+        "cpg_bed": {
+            "type": "string",
+            "default": "/facility/nfdata-omics/pipelines/development/methylseq/assets/mm10.cpg.bed"
+        },
+        "cov_dir": {
+            "type": "string"
+        },
+        "metadata": {
+            "type": "string"
+        },
+        "group_column": {
+            "type": "string",
+            "default": "genotype"
+        },
+        "group_case": {
+            "type": "string",
+            "default": "Mut"
+        },
+        "assembly": {
+            "type": "string",
+            "default": "mm10"
+        },
+        "cores": {
+            "type": "integer",
+            "default": 4
+        },
+        "sample_suffix": {
+            "type": "string",
+            "default": "_1_val_1_bismark_bt2_pe.bismark.cov.gz"
+        },
+        "lo_count": {
+            "type": "integer",
+            "default": 5
+        },
+        "lo_perc": {
+            "type": "string",
+            "default": "NA"
+        },
+        "hi_count": {
+            "type": "string",
+            "default": "NA"
+        },
+        "hi_perc": {
+            "type": "number",
+            "default": 99.9
+        },
+        "destrand": {
+            "type": "boolean"
+        },
+        "min_per_group": {
+            "type": "string"
+        },
+        "diff_cutoff": {
+            "type": "integer",
+            "default": 25
+        },
+        "qvalue_cutoff": {
+            "type": "number",
+            "default": 0.01
+        },
+        "overdispersion": {
+            "type": "string",
+            "default": "MN"
+        },
+        "adjust": {
+            "type": "string",
+            "default": "BH"
+        },
+        "comparisons": {
+            "type": "string"
+        },
+        "comparison_stratify_by": {
+            "type": "string"
+        },
+        "primary_analysis": {
+            "type": "boolean",
+            "default": true
+        },
+        "advanced_analysis": {
+            "type": "boolean"
+        }
+    }
 }
