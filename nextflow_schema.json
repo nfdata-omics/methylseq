@@ -789,6 +789,18 @@
             "type": "string",
             "default": "/facility/nfdata-omics/pipelines/development/methylseq/assets/mm10.cpg.bed"
         },
+        "gtf": {
+            "type": "string",
+            "description": "GTF annotation file. By default this is resolved from the selected iGenomes genome entry."
+        },
+        "annotation_prom_up": {
+            "type": "integer",
+            "default": 1000
+        },
+        "annotation_prom_down": {
+            "type": "integer",
+            "default": 200
+        },
         "cov_dir": {
             "type": "string"
         },

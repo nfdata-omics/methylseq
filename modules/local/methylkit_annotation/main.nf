@@ -10,17 +10,45 @@ process METHYLKIT_ANNOTATION {
     tuple val(caller), val(comparison_id), val(result_type), path(dmr_tsv)
     path refseq_bed 
     path cpg_bed 
+    path gtf_file
+    val prom_up
+    val prom_down
+    val diff_cutoff
+    val qvalue_cutoff
 
     output:
     tuple val(caller), val(comparison_id), val(result_type), path("*.tsv"), emit: tsv
     tuple val(caller), val(comparison_id), val(result_type), path("*.pdf"), emit: pdf
+    tuple val(caller), val(comparison_id), val(result_type), path("*.txt"), emit: txt
 
     script:
     """
-    methylkit_annotation.R \\
+    annotation_script=""
+    old_ifs="\$IFS"
+    IFS=':'
+    for path_dir in \$PATH; do
+        if [ -f "\${path_dir}/methylkit_annotation.R" ]; then
+            annotation_script="\${path_dir}/methylkit_annotation.R"
+            break
+        fi
+    done
+    IFS="\$old_ifs"
+    if [ -z "\${annotation_script}" ]; then
+        echo "Could not find methylkit_annotation.R on PATH" >&2
+        exit 1
+    fi
+
+    Rscript "\${annotation_script}" \\
         --dmr_tsv    ${dmr_tsv} \\
+        --caller     '${caller}' \\
+        --result_type '${result_type}' \\
         --refseq_bed ${refseq_bed} \\
         --cpg_bed    ${cpg_bed} \\
+        --gtf_file   ${gtf_file} \\
+        --prom_up ${prom_up} \\
+        --prom_down ${prom_down} \\
+        --diff_cutoff ${diff_cutoff} \\
+        --qvalue_cutoff ${qvalue_cutoff} \\
         --out_prefix ${comparison_id}_${caller}_${result_type}
     """
 }

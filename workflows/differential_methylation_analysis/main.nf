@@ -174,11 +174,30 @@ workflow DIFFERENTIAL_METHYLATION_ANALYSIS {
 
     if (selected_methods.contains('methylkit') || selected_methods.contains('dss')) {
 
+        def annotation_gtf = params.gtf ?: (
+            params.genomes &&
+            params.genome &&
+            params.genomes.containsKey(params.genome)
+                ? params.genomes[params.genome].gtf
+                : null
+        )
+
+        if (!annotation_gtf) {
+            error "No GTF annotation resolved for genome '${params.genome}'. Configure the genome GTF in conf/igenomes.config or provide --gtf."
+        }
+
+        log.info "Differential methylation annotation GTF: ${annotation_gtf}"
+
         // Shared annotation for caller-specific differential methylation outputs
         METHYLKIT_ANNOTATION (
             annotation_input_ch,
             params.refseq_bed,
-            params.cpg_bed
+            params.cpg_bed,
+            file(annotation_gtf, checkIfExists: true),
+            params.annotation_prom_up,
+            params.annotation_prom_down,
+            params.diff_cutoff,
+            params.qvalue_cutoff
         )
 
     }

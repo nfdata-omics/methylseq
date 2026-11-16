@@ -34,6 +34,10 @@ params.bwameth_index = getGenomeAttribute('bwameth')
 params.bwamem_index  = getGenomeAttribute('bwa')
 params.bismark_index = params.aligner == 'bismark_hisat' ? getGenomeAttribute('bismark_hisat2') : getGenomeAttribute('bismark')
 
+def bundled_refseq_bed = "${projectDir}/assets/mm10.refseq.genes.bed"
+params.refseq_bed = params.refseq_bed && params.refseq_bed != bundled_refseq_bed ? params.refseq_bed : (getGenomeAttribute('bed12') ?: bundled_refseq_bed)
+params.gtf        = params.gtf ?: (getGenomeAttribute('gtf') ?: '')
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     NAMED WORKFLOWS FOR PIPELINE
@@ -165,7 +169,7 @@ workflow {
     //
     // SUBWORKFLOW: Run completion tasks
     //
-    /*PIPELINE_COMPLETION (
+    PIPELINE_COMPLETION (
         params.email,
         params.email_on_fail,
         params.plaintext_email,
@@ -173,7 +177,7 @@ workflow {
         params.monochrome_logs,
         params.hook_url,
         NFCORE_METHYLSEQ.out.multiqc_report
-    )*/
+    )
 }
 
 /*
