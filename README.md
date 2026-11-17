@@ -21,7 +21,13 @@
 
 ## Introduction
 
+This extended methylation analysis pipeline is developed at the [National Facility for Data Handling and Analysis, Human Technopole](https://humantechnopole.it/en/facilities/national-facility-for-data-handling-analysis/), building on **nf-core/methylseq** to bring standard processing, differential methylation analysis, and genomic annotation into one Nextflow workflow.
+
 **nf-core/methylseq** is a bioinformatics analysis pipeline used for Methylation (Bisulfite) sequencing data. It pre-processes raw data from FastQ inputs, aligns the reads and performs extensive quality-control on the results.
+
+This repository extends the cloned **nf-core/methylseq** pipeline with downstream differential methylation analysis and genomic annotation. Standard processing and advanced analysis can now run within the same Nextflow pipeline: start from FASTQ files and continue through differential analysis and annotation, or run advanced analysis independently on existing Bismark coverage files.
+
+The original standard-analysis description is retained below. The additions specific to this repository are described in [Advanced analysis features](#advanced-analysis-features) and [Selecting standard and advanced analysis](#selecting-standard-and-advanced-analysis). Commands using `nf-core/methylseq` refer to the upstream pipeline; use `nextflow run .` from this cloned repository to access the added features.
 
 ![nf-core/methylseq metro map](docs/images/4.2.0_metromap.png)
 
@@ -56,6 +62,17 @@ Note: For faster CPU runs with BWA-Meth, enable the BWA-MEM2 algorithm using `--
 
 Optional targeted sequencing analysis is available via `--run_targeted_sequencing` and `--target_regions_file`; see the [usage documentation](https://nf-co.re/methylseq/usage) for details.
 
+### Advanced analysis features
+
+The advanced workflow adds the following steps to standard methylation processing:
+
+- **Methylation preprocessing and QC with methylKit:** coverage filtering and normalization, shared CpG tables, PCA, sample clustering, and coverage and methylation summaries.
+- **Differential methylation analysis:** choose `methylkit` for differentially methylated cytosines (DMCs), `dss` for locus-level results (DMLs) and differentially methylated regions (DMRs), or `dmr_detector` for region detection from paired sample methylation profiles. Multiple methods can be selected in one run.
+- **Comparison design:** generate comparisons from sample metadata, optionally within strata, or supply an explicit comparison table.
+- **Genomic annotation of methylKit and DSS results:** gene parts, distance to transcription start sites (TSSs), CpG islands and shores, and GTF-based promoter, gene-body, and nearest-TSS annotations. Outputs include annotation tables, plots, and enrichment summaries where the required classes are available.
+
+The advanced workflow currently reads **Bismark coverage files**. The standard aligner options described above remain available for primary analysis. `dmr_detector` currently supports one case and one control sample per comparison; its results do not pass through the shared annotation step.
+
 ## Usage
 
 > [!NOTE]
@@ -86,12 +103,122 @@ nextflow run nf-core/methylseq --input samplesheet.csv --outdir <OUTDIR> --genom
 
 For more details and further functionality, please refer to the [usage documentation](https://nf-co.re/methylseq/usage) and the [parameter documentation](https://nf-co.re/methylseq/parameters).
 
+### Selecting standard and advanced analysis
+
+Two parameters control which parts of this repository's pipeline run. **Standard analysis** corresponds to `primary_analysis`; **advanced analysis** corresponds to `advanced_analysis`.
+
+| Mode | `--primary_analysis` | `--advanced_analysis` | Input |
+| --- | --- | --- | --- |
+| Standard only (default) | `true` | `false` | FASTQ samplesheet described above |
+| Standard followed by advanced | `true` | `true` | FASTQ samplesheet and metadata CSV |
+| Advanced only | `false` | `true` | Coverage samplesheet and metadata CSV |
+
+Setting both parameters to `false` is invalid. Run the following examples from the root of this cloned repository.
+
+**Standard only:** retains the original preprocessing, alignment, methylation calling, and QC workflow.
+
+```bash
+nextflow run . -profile docker \
+    --input samplesheet.csv \
+    --outdir results/standard \
+    --genome mm10 \
+    --primary_analysis true \
+    --advanced_analysis false
+```
+
+**Standard followed by advanced:** passes the Bismark coverage files directly into differential analysis and annotation.
+
+```bash
+nextflow run . -profile docker \
+    --input samplesheet.csv \
+    --metadata metadata.csv \
+    --outdir results/combined \
+    --genome mm10 \
+    --aligner bismark \
+    --primary_analysis true \
+    --advanced_analysis true \
+    --differential_analysis_methods methylkit,dss \
+    --sample_suffix '<COVERAGE_FILENAME_SUFFIX>'
+```
+
+**Advanced only:** reuses coverage files without repeating FASTQ processing or alignment.
+
+```bash
+nextflow run . -profile docker \
+    --input coverage_samplesheet.csv \
+    --metadata metadata.csv \
+    --outdir results/advanced \
+    --genome mm10 \
+    --primary_analysis false \
+    --advanced_analysis true \
+    --differential_analysis_methods methylkit,dss \
+    --sample_suffix '<COVERAGE_FILENAME_SUFFIX>'
+```
+
+Replace `<COVERAGE_FILENAME_SUFFIX>` with the exact suffix to remove from coverage filenames to obtain the sample IDs in metadata. For example, `case_1_val_1_bismark_bt2_pe.deduplicated.bismark.cov.gz` requires the suffix `_1_val_1_bismark_bt2_pe.deduplicated.bismark.cov.gz` to recover the ID `case`. The suffix depends on trimming, alignment, paired-end status, and deduplication; check the actual filenames for your run.
+
+#### Advanced-analysis inputs
+
+For advanced-only runs, `coverage_samplesheet.csv` contains `sample` and `meth_cov` columns. Use absolute paths for coverage files:
+
+```csv
+sample,meth_cov
+control,/data/control_1_val_1_bismark_bt2_pe.deduplicated.bismark.cov.gz
+case,/data/case_1_val_1_bismark_bt2_pe.deduplicated.bismark.cov.gz
+```
+
+Metadata is a CSV whose first column contains sample IDs matching the coverage filenames after suffix removal. The default grouping column is `genotype`, and the default case label is `Mut`:
+
+```csv
+sample,genotype
+control,WT
+case,Mut
+```
+
+Use `--group_column` and `--group_case` to change these defaults. Automatic comparisons use the case label against all other labels within each stratum. Set `--comparison_stratify_by tissue,sex`, for example, to generate separate comparisons within combinations of those metadata columns. Each stratum needs both case and control samples to generate a comparison.
+
+Alternatively, provide `--comparisons comparisons.tsv` with these **tab-separated** columns; sample lists within a cell are comma-separated:
+
+```text
+comparison_id	case_samples	control_samples
+Mut_vs_WT	case	control
+```
+
+Choose methods with `--differential_analysis_methods methylkit`, `dss`, `dmr_detector`, a comma-separated combination, or `all`. The default is `methylkit`. DSS supports either one sample per group or at least two samples in both groups; selecting `all` also requires the one-case/one-control design supported by `dmr_detector`.
+
+#### Filtering and annotation settings
+
+The main methylKit settings are `--lo_count`, `--lo_perc`, `--hi_count`, and `--hi_perc` for coverage filtering; `--destrand` and `--min_per_group` for merging CpGs; and `--diff_cutoff`, `--qvalue_cutoff`, `--overdispersion`, and `--adjust` for differential testing. The default methylKit effect-size and q-value cutoffs are 25 percentage points and 0.01. DSS uses its own calling defaults; these methylKit testing options do not configure the DSS caller.
+
+Annotation for methylKit and DSS requires `--refseq_bed`, `--cpg_bed`, and a GTF. The GTF is resolved from `--genome` when available, or can be supplied explicitly with `--gtf`. Promoter windows are controlled by `--annotation_prom_up` (default 1000 bp) and `--annotation_prom_down` (default 200 bp).
+
+The bundled annotation BED files and default `--assembly` label are **mm10**. For another reference assembly, supply matching BED files and `--assembly`, and ensure the GTF matches the reference used for alignment.
+
 ## Pipeline output
 
 To see the results of an example test run with a full size dataset refer to the [results](https://nf-co.re/methylseq/results) tab on the nf-core website pipeline page.
 For more details about the output files and reports, please refer to the [output documentation](https://nf-co.re/methylseq/output).
 
+Advanced analysis adds the following directories under `--outdir`, according to the selected methods:
+
+| Directory | Contents |
+| --- | --- |
+| `methylkit/preprocessing/` | Preprocessed methylation objects, methylKit database, shared CpG matrix, QC tables, and plots; also used by `dmr_detector` |
+| `methylkit/dma/<comparison_id>/` | Raw differential results, significant hyper/hypomethylated DMC tables, and plots |
+| `dss/dma/<comparison_id>/` | DML and DMR tables, comparison summaries, and saved R objects |
+| `dmr_detector/<comparison_id>/` | Hyper/hypomethylated region and window tables |
+| `<caller>/annotation/<comparison_id>/` | Annotated methylKit or DSS results, gene/TSS and CpG-context tables, plots, and enrichment summaries |
+
+Standard reports remain part of primary analysis; advanced-only runs do not generate the primary-analysis MultiQC report.
+
 ## Credits
+
+The extensions in this repository were developed at the [National Facility for Data Handling and Analysis, Human Technopole](https://humantechnopole.it/en/facilities/national-facility-for-data-handling-analysis/) by:
+
+- Youssef Abili ([@YussAb](https://github.com/YussAb))
+- Giulia Scotti ([@laPepatencia](https://github.com/laPepatencia))
+
+Their contributions extend the upstream pipeline with integrated advanced analysis and genomic annotation.
 
 nf-core/methylseq was originally written by Phil Ewels ([@ewels](https://github.com/ewels)), and Sateesh Peri ([@sateeshperi](https://github.com/sateeshperi)) is its active maintainer.
 
@@ -111,6 +238,10 @@ If you would like to contribute to this pipeline, please see the [contributing g
 For further information or help, don't hesitate to get in touch on the [Slack `#methylseq` channel](https://nfcore.slack.com/channels/methylseq) (you can join with [this invite](https://nf-co.re/join/slack)).
 
 ## Citations
+
+When using this extended pipeline, please acknowledge the [National Facility for Data Handling and Analysis, Human Technopole](https://humantechnopole.it/en/facilities/national-facility-for-data-handling-analysis/) and the development contributions of Youssef Abili and Giulia Scotti, alongside the upstream pipeline and relevant analysis tools. Suggested acknowledgement:
+
+> Methylation analysis was performed using the extended nf-core/methylseq pipeline developed by Youssef Abili and Giulia Scotti at the National Facility for Data Handling and Analysis, Human Technopole, integrating standard processing, differential methylation analysis, and genomic annotation.
 
 If you use nf-core/methylseq for your analysis, please cite it using the following doi: [10.5281/zenodo.1343417](https://doi.org/10.5281/zenodo.1343417)
 

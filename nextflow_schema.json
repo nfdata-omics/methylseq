@@ -1,8 +1,8 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://raw.githubusercontent.com/nf-core/methylseq/master/nextflow_schema.json",
-    "title": "nf-core/methylseq pipeline parameters",
-    "description": "Methylation (Bisulfite-Sequencing) Best Practice analysis pipeline, part of the nf-core community.",
+    "title": "Human Technopole extended nf-core/methylseq pipeline parameters",
+    "description": "Extended nf-core/methylseq pipeline developed at the National Facility for Data Handling and Analysis, Human Technopole: standard methylation processing, differential methylation analysis, and genomic annotation.",
     "type": "object",
     "$defs": {
         "input_output_options": {
@@ -19,8 +19,8 @@
                     "schema": "assets/schema_input.json",
                     "mimetype": "text/csv",
                     "pattern": "^\\S+\\.csv$",
-                    "description": "Path to comma-separated file containing information about the samples in the experiment.",
-                    "help_text": "You will need to create a design file with information about the samples in your experiment before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row. See [usage docs](https://nf-co.re//usage#samplesheet-input).",
+                    "description": "Input CSV: FASTQ samplesheet for standard/combined runs, or coverage samplesheet for advanced-only runs.",
+                    "help_text": "With --primary_analysis true, provide the standard samplesheet with sample,fastq_1,fastq_2,genome columns; leave fastq_2 empty for single-end reads. With --primary_analysis false --advanced_analysis true, provide sample,meth_cov columns pointing to existing Bismark coverage files. Advanced analysis also requires --metadata and a --sample_suffix matching the coverage filenames. See README.md for both formats.",
                     "fa_icon": "fas fa-file-csv"
                 },
                 "outdir": {
@@ -42,6 +42,28 @@
                     "fa_icon": "fas fa-file-signature"
                 }
             }
+        },
+        "analysis_mode_options": {
+            "title": "Analysis mode",
+            "type": "object",
+            "description": "Choose standard processing, advanced analysis, or both. Standard only: primary_analysis=true, advanced_analysis=false. Combined: true/true. Advanced only: false/true. Both false is invalid.",
+            "properties": {
+                "primary_analysis": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Run standard FASTQ processing, alignment, methylation calling, and QC.",
+                    "help_text": "Enabled by default. Supply the standard FASTQ samplesheet through --input. Set --advanced_analysis true to continue into differential methylation and annotation. For advanced-only analysis of existing Bismark coverage files, set --primary_analysis false --advanced_analysis true. See README.md for examples.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "advanced_analysis": {
+                    "type": "boolean",
+                    "description": "Run differential methylation analysis and annotation from Bismark coverage files.",
+                    "help_text": "Disabled by default. Requires --metadata. With --primary_analysis true, use a Bismark aligner and the FASTQ samplesheet; generated coverage is passed directly downstream. With --primary_analysis false, --input must be a CSV with sample,meth_cov columns and paths to existing coverage files. Choose callers with --differential_analysis_methods. MethylKit and DSS results are annotated automatically; dmr_detector results are not.",
+                    "fa_icon": "fas fa-sliders-h",
+                    "default": false
+                }
+            },
+            "fa_icon": "fas fa-code-branch"
         },
         "save_intermediate_files": {
             "title": "Save intermediate files",
@@ -424,36 +446,235 @@
             },
             "fa_icon": "far fa-circle"
         },
-        "differential_methylation_options": {
-            "title": "Differential methylation options",
+        "advanced_input_options": {
+            "title": "Advanced analysis: samples and comparisons",
             "type": "object",
-            "description": "Options for downstream differential methylation methods.",
-            "default": "",
+            "description": "Used when advanced_analysis=true. Sample IDs in metadata, comparison lists, and coverage filenames after suffix removal must agree.",
+            "properties": {
+                "metadata": {
+                    "type": "string",
+                    "description": "Metadata CSV required for advanced analysis.",
+                    "help_text": "The first column must contain unique sample IDs, for example sample,genotype followed by control,WT and case,Mut. Include the grouping column and any stratification columns. Used by every selected method, including when --comparisons is supplied. Use CSV with a header; metadata TSV is not supported by the current pipeline wrappers.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "sample_suffix": {
+                    "type": "string",
+                    "default": "_1_val_1_bismark_bt2_pe.bismark.cov.gz",
+                    "description": "Exact coverage filename suffix to remove to recover metadata sample IDs.",
+                    "help_text": "Used by methylKit and DSS; dmr_detector inherits sample IDs from methylKit preprocessing. For case_1_val_1_bismark_bt2_pe.deduplicated.bismark.cov.gz and metadata ID case, use _1_val_1_bismark_bt2_pe.deduplicated.bismark.cov.gz. The default omits .deduplicated and assumes trimmed paired-end Bowtie2 output. Adjust it to the actual files when deduplication, trimming, endedness, or aligner changes.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "group_column": {
+                    "type": "string",
+                    "default": "genotype",
+                    "description": "Metadata column defining case and control groups.",
+                    "help_text": "Defaults to genotype. Used for automatic comparisons and for methylKit preprocessing, including the preprocessing needed by dmr_detector. The column is still required by methylKit preprocessing when an explicit comparison table is supplied. Example: --group_column condition.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "group_case": {
+                    "type": "string",
+                    "default": "Mut",
+                    "description": "Metadata label treated as the case group.",
+                    "help_text": "Defaults to Mut; matching is case-sensitive. For automatic comparisons, samples equal to this label are cases and all other labels are pooled as controls within each stratum. MethylKit preprocessing uses this same grouping. Explicit --comparisons lists determine the case and control membership for differential testing.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "comparisons": {
+                    "type": "string",
+                    "description": "Optional TSV defining explicit case-versus-control comparisons.",
+                    "help_text": "Use tab-separated columns comparison_id, case_samples, control_samples. Sample lists within each cell are comma-separated, for example Mut_vs_WT followed by case1,case2 and control1,control2. Use unique comparison IDs suitable for filenames and nonoverlapping case/control lists. Overrides automatic comparison generation and --comparison_stratify_by, but does not replace --metadata. DSS requires 1 vs 1 or at least 2 samples in both groups; dmr_detector requires exactly 1 vs 1.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "comparison_stratify_by": {
+                    "type": "string",
+                    "description": "Comma-separated metadata columns used to generate comparisons within strata.",
+                    "help_text": "Example: --comparison_stratify_by tissue,sex. Without this option, generate one case-versus-control comparison across the metadata. With it, generate a comparison within each combination of column values. Strata without both cases and controls are skipped. Ignored when --comparisons is supplied.",
+                    "fa_icon": "fas fa-sliders-h"
+                }
+            },
+            "fa_icon": "fas fa-users"
+        },
+        "methylkit_preprocessing_options": {
+            "title": "Advanced analysis: methylKit preprocessing and QC",
+            "type": "object",
+            "description": "Used when methylkit or dmr_detector is selected. Coverage filtering is followed by median coverage normalization and CpG merging across the cohort. These settings do not configure DSS.",
+            "properties": {
+                "assembly": {
+                    "type": "string",
+                    "default": "mm10",
+                    "description": "Assembly label stored in methylKit objects.",
+                    "help_text": "Defaults to mm10. Set it to the assembly used for alignment, for example hg38. This labels the methylKit data; it does not select a reference genome, convert coordinates, or change annotation files. Configure --genome and annotation resources separately.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "lo_count": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Discard CpGs with coverage below this read count.",
+                    "help_text": "Applied by methylKit filterByCoverage before normalization. Default: 5 reads. The current import step also uses a fixed minimum coverage of 5, so lowering this value below 5 does not recover lower-coverage sites.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "lo_perc": {
+                    "type": "string",
+                    "default": "NA",
+                    "description": "Lower coverage percentile cutoff, or NA to disable.",
+                    "help_text": "Passed to methylKit filterByCoverage as lo.perc. Supply a percentile from 0 to 100 as a string; the default NA disables this percentile filter. CpGs below the chosen coverage percentile are removed. See the methylKit documentation for using count and percentile cutoffs together.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "hi_count": {
+                    "type": "string",
+                    "default": "NA",
+                    "description": "Upper coverage read-count cutoff, or NA to disable.",
+                    "help_text": "Passed to methylKit filterByCoverage as hi.count. Supply a read count as a string; the default NA disables this count filter. Sites above the cutoff are removed before normalization.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "hi_perc": {
+                    "type": "number",
+                    "default": 99.9,
+                    "description": "Discard CpGs above this coverage percentile.",
+                    "help_text": "Passed to methylKit filterByCoverage as hi.perc. Default: 99.9, which removes the upper coverage tail in each sample before normalization. Express the percentile on a 0 to 100 scale.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "destrand": {
+                    "type": "boolean",
+                    "description": "Merge complementary strands of CpG dinucleotides during methylKit unite.",
+                    "help_text": "Default: false. Passed to methylKit unite after filtering and normalization. Enable to combine coverage and methylation counts from complementary CpG strands.",
+                    "fa_icon": "fas fa-sliders-h",
+                    "default": false
+                },
+                "min_per_group": {
+                    "type": "string",
+                    "description": "Minimum samples per global treatment group required to retain a CpG.",
+                    "help_text": "Supply an integer as a string, for example \"2\". If unset, or set to NA, NULL, or null, methylKit retains sites covered in all samples. This requirement is applied to the full cohort using --group_column and --group_case before individual comparisons are selected; it is not recalculated per comparison.",
+                    "fa_icon": "fas fa-sliders-h"
+                }
+            },
+            "fa_icon": "fas fa-chart-bar"
+        },
+        "differential_methylation_options": {
+            "title": "Advanced analysis: differential methylation methods",
+            "type": "object",
+            "description": "Choose one or more callers. MethylKit testing settings below do not change DSS or dmr_detector calling thresholds.",
             "properties": {
                 "differential_analysis_methods": {
                     "type": "string",
                     "default": "methylkit",
-                    "description": "Differential methylation method selector.",
-                    "help_text": "Comma-separated list of differential methylation methods to run. Implemented values: `methylkit`, `dss`. Use `all` to run all currently implemented methods.",
+                    "description": "Caller selection: methylkit, dss, dmr_detector, a comma-separated combination, or all.",
+                    "help_text": "Default: methylkit. Select multiple methods with --differential_analysis_methods methylkit,dss.\n\nmethylkit: coverage preprocessing/QC and cytosine-level differential testing, followed by annotation. Uses the filtering and testing settings in the methylKit groups.\n\ndss: reads Bismark coverage directly and produces DML and DMR results, followed by annotation. Requires 1 vs 1 or at least 2 samples on each side. Current caller defaults: minimum coverage 5, DMR p-value threshold 0.001, delta 0.10, minimum region length 20 bp, minimum 3 CpGs, merge distance 50 bp. Smoothing is enabled for 1 vs 1 and disabled for replicated groups. These are script defaults, not exposed pipeline parameters.\n\ndmr_detector: detects regions and windows from the methylKit shared CpG matrix. Requires exactly 1 case and 1 control per comparison. Detector thresholds and window settings come from modules/local/dmr_detector/resources/usr/bin/config.txt; methylKit testing cutoffs do not configure this caller. Its outputs are not annotated.\n\nall: enables all three methods, so every comparison must satisfy the 1 vs 1 design required by dmr_detector.",
                     "fa_icon": "fas fa-code-branch"
                 },
-                "methylkit": {
-                    "type": "boolean",
-                    "description": "Legacy alias to run the methylKit differential methylation workflow.",
-                    "hidden": true
+                "diff_cutoff": {
+                    "type": "integer",
+                    "default": 25,
+                    "description": "Minimum absolute methylKit methylation difference in percentage points.",
+                    "help_text": "Default: 25 percentage points. Used with --qvalue_cutoff to select significant methylKit DMCs. Also used for significance labels in shared annotation when effect-size and q-value columns are available. Does not set DSS delta or dmr_detector thresholds. Annotated effects are normalized to case minus control.",
+                    "fa_icon": "fas fa-sliders-h"
                 },
-                "dss": {
-                    "type": "boolean",
-                    "description": "Legacy alias to run the DSS differential methylation workflow.",
-                    "hidden": true
+                "qvalue_cutoff": {
+                    "type": "number",
+                    "default": 0.01,
+                    "description": "Q-value cutoff for significant methylKit results and shared annotation labels.",
+                    "help_text": "Default: 0.01. Used with --diff_cutoff for methylKit result selection and for annotation significance labels when q-values are available. Does not configure the DSS region-calling p-value threshold or dmr_detector.",
+                    "fa_icon": "fas fa-sliders-h"
                 },
-                "dmr_detector": {
-                    "type": "boolean",
-                    "description": "Legacy alias reserved for a future DMR detector workflow.",
-                    "hidden": true
+                "overdispersion": {
+                    "type": "string",
+                    "default": "MN",
+                    "description": "Overdispersion correction used by methylKit calculateDiffMeth.",
+                    "help_text": "Supported values: none, MN, shrinkMN. Default: MN. Applies only to methylKit differential testing. The current wrapper uses the R script default Chisq test; there is no pipeline --test option.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "adjust": {
+                    "type": "string",
+                    "default": "BH",
+                    "description": "Multiple-testing adjustment method for methylKit differential testing.",
+                    "help_text": "Supported values: SLIM, holm, hochberg, hommel, bonferroni, BH, BY, fdr, none, qvalue. Default: BH (Benjamini-Hochberg). Applies only to methylKit; it does not configure DSS.",
+                    "fa_icon": "fas fa-sliders-h"
                 }
             },
             "fa_icon": "fas fa-code-branch"
+        },
+        "annotation_options": {
+            "title": "Advanced analysis: genomic annotation",
+            "type": "object",
+            "description": "Automatically annotates methylKit DMC and DSS DML/DMR outputs. All BED and GTF resources must match the assembly used for alignment. dmr_detector outputs are not annotated.",
+            "properties": {
+                "refseq_bed": {
+                    "type": "string",
+                    "description": "Transcript BED12 annotation for gene parts and TSS associations.",
+                    "help_text": "Required for shared annotation. The pipeline attempts to resolve bed12 from the selected genome, with a bundled mm10 RefSeq BED fallback; provide an explicit matching BED for your reference. A matching GTF is also required. Chromosome-name harmonization does not make different genome assemblies compatible.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "cpg_bed": {
+                    "type": "string",
+                    "description": "CpG island BED annotation used for island and shore overlaps.",
+                    "help_text": "Defaults to the bundled assets/mm10.cpg.bed. Supply a matching assembly-specific BED when using another genome; --genome does not automatically replace this file. Islands use BED coordinates (0-based, half-open); shores extend 2,000 bp on either side.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "gtf": {
+                    "type": "string",
+                    "description": "GTF annotation for promoter, gene-body, and nearest-TSS annotations.",
+                    "help_text": "Required for methylKit/DSS annotation. Resolved from the selected --genome entry when available; provide --gtf explicitly otherwise. Must match the assembly used for alignment. Used in addition to --refseq_bed and --cpg_bed.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "annotation_prom_up": {
+                    "type": "integer",
+                    "default": 1000,
+                    "description": "Bases upstream of the TSS in GTF-based promoter windows.",
+                    "help_text": "Default: 1000 bp. Applied relative to transcript strand together with --annotation_prom_down. Changes GTF-based promoter overlaps; it does not configure the legacy RefSeq gene-part annotation.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "annotation_prom_down": {
+                    "type": "integer",
+                    "default": 200,
+                    "description": "Bases downstream of the TSS in GTF-based promoter windows.",
+                    "help_text": "Default: 200 bp. Applied relative to transcript strand together with --annotation_prom_up. Changes GTF-based promoter overlaps; it does not configure the legacy RefSeq gene-part annotation.",
+                    "fa_icon": "fas fa-sliders-h"
+                }
+            },
+            "fa_icon": "fas fa-dna"
+        },
+        "legacy_advanced_options": {
+            "title": "Legacy advanced-analysis options",
+            "type": "object",
+            "description": "Retained for compatibility. These options do not control the current analysis workflow.",
+            "properties": {
+                "cov_dir": {
+                    "type": "string",
+                    "description": "Unused legacy coverage-directory parameter.",
+                    "help_text": "The workflow collects coverage from primary-analysis outputs or from the advanced-only --input CSV with sample,meth_cov columns. This parameter is not read by the workflow.",
+                    "fa_icon": "fas fa-sliders-h",
+                    "hidden": true
+                },
+                "cores": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "Unused legacy CPU parameter for advanced analysis.",
+                    "help_text": "Advanced methylKit tasks receive task.cpus from Nextflow process resource configuration. Change process cpus in your execution configuration; --cores does not change the current wrappers.",
+                    "fa_icon": "fas fa-sliders-h",
+                    "hidden": true
+                },
+                "methylkit": {
+                    "type": "boolean",
+                    "description": "Unused legacy method flag; select callers with --differential_analysis_methods.",
+                    "hidden": true,
+                    "help_text": "This boolean is not used by the current method-selection logic. Set --advanced_analysis true and select callers with --differential_analysis_methods instead.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "dss": {
+                    "type": "boolean",
+                    "description": "Unused legacy method flag; select callers with --differential_analysis_methods.",
+                    "hidden": true,
+                    "help_text": "This boolean is not used by the current method-selection logic. Set --advanced_analysis true and select callers with --differential_analysis_methods instead.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "dmr_detector": {
+                    "type": "boolean",
+                    "description": "Unused legacy method flag; select callers with --differential_analysis_methods.",
+                    "hidden": true,
+                    "help_text": "This boolean is not used by the current method-selection logic. Set --advanced_analysis true and select callers with --differential_analysis_methods instead.",
+                    "fa_icon": "fas fa-sliders-h"
+                }
+            },
+            "fa_icon": "fas fa-history"
         },
         "rastair_options": {
             "title": "rastair options",
@@ -566,7 +787,7 @@
                 },
                 "run_targeted_sequencing": {
                     "type": "boolean",
-                    "description": "Run advanced analysis for targeted methylation kits with enrichment of specific regions",
+                    "description": "Run optional targeted-sequencing QC during standard analysis (separate from --advanced_analysis).",
                     "fa_icon": "fas fa-fast-forward"
                 }
             },
@@ -735,6 +956,9 @@
             "$ref": "#/$defs/input_output_options"
         },
         {
+            "$ref": "#/$defs/analysis_mode_options"
+        },
+        {
             "$ref": "#/$defs/save_intermediate_files"
         },
         {
@@ -756,7 +980,19 @@
             "$ref": "#/$defs/methyldackel_options"
         },
         {
+            "$ref": "#/$defs/advanced_input_options"
+        },
+        {
+            "$ref": "#/$defs/methylkit_preprocessing_options"
+        },
+        {
             "$ref": "#/$defs/differential_methylation_options"
+        },
+        {
+            "$ref": "#/$defs/annotation_options"
+        },
+        {
+            "$ref": "#/$defs/legacy_advanced_options"
         },
         {
             "$ref": "#/$defs/rastair_options"
@@ -779,104 +1015,5 @@
         {
             "$ref": "#/$defs/institutional_config_options"
         }
-    ],
-    "properties": {
-        "refseq_bed": {
-            "type": "string",
-            "default": "/facility/nfdata-omics/pipelines/development/methylseq/assets/mm10.refseq.genes.bed"
-        },
-        "cpg_bed": {
-            "type": "string",
-            "default": "/facility/nfdata-omics/pipelines/development/methylseq/assets/mm10.cpg.bed"
-        },
-        "gtf": {
-            "type": "string",
-            "description": "GTF annotation file. By default this is resolved from the selected iGenomes genome entry."
-        },
-        "annotation_prom_up": {
-            "type": "integer",
-            "default": 1000
-        },
-        "annotation_prom_down": {
-            "type": "integer",
-            "default": 200
-        },
-        "cov_dir": {
-            "type": "string"
-        },
-        "metadata": {
-            "type": "string"
-        },
-        "group_column": {
-            "type": "string",
-            "default": "genotype"
-        },
-        "group_case": {
-            "type": "string",
-            "default": "Mut"
-        },
-        "assembly": {
-            "type": "string",
-            "default": "mm10"
-        },
-        "cores": {
-            "type": "integer",
-            "default": 4
-        },
-        "sample_suffix": {
-            "type": "string",
-            "default": "_1_val_1_bismark_bt2_pe.bismark.cov.gz"
-        },
-        "lo_count": {
-            "type": "integer",
-            "default": 5
-        },
-        "lo_perc": {
-            "type": "string",
-            "default": "NA"
-        },
-        "hi_count": {
-            "type": "string",
-            "default": "NA"
-        },
-        "hi_perc": {
-            "type": "number",
-            "default": 99.9
-        },
-        "destrand": {
-            "type": "boolean"
-        },
-        "min_per_group": {
-            "type": "string"
-        },
-        "diff_cutoff": {
-            "type": "integer",
-            "default": 25
-        },
-        "qvalue_cutoff": {
-            "type": "number",
-            "default": 0.01
-        },
-        "overdispersion": {
-            "type": "string",
-            "default": "MN"
-        },
-        "adjust": {
-            "type": "string",
-            "default": "BH"
-        },
-        "comparisons": {
-            "type": "string"
-        },
-        "comparison_stratify_by": {
-            "type": "string"
-        },
-        "primary_analysis": {
-            "type": "boolean",
-            "default": true
-        },
-        "advanced_analysis": {
-            "type": "boolean"
-        }
-    }
+    ]
 }
