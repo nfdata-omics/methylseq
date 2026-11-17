@@ -57,6 +57,7 @@ workflow NFCORE_METHYLSEQ {
     main:
 
     ch_versions = channel.empty()
+    ch_multiqc_report = channel.empty()
 
     //
     // Initialize file channels or values based on params
@@ -105,6 +106,7 @@ workflow NFCORE_METHYLSEQ {
             FASTA_INDEX_METHYLSEQ.out.bwamem_index,
         )
         ch_versions = ch_versions.mix(METHYLSEQ.out.versions)
+        ch_multiqc_report = METHYLSEQ.out.multiqc_report
 
         if (params.advanced_analysis) {
             DIFFERENTIAL_METHYLATION_ANALYSIS (
@@ -128,9 +130,9 @@ workflow NFCORE_METHYLSEQ {
     }
  
 
-    //emit:
-    //multiqc_report = METHYLSEQ.out.multiqc_report // channel: [ path(multiqc_report.html )  ]
-    //versions       = ch_versions                  // channel: [ path(versions.yml) ]
+    emit:
+    multiqc_report = ch_multiqc_report
+    versions       = ch_versions
 
 }
 /*

@@ -23,22 +23,7 @@ process METHYLKIT_ANNOTATION {
 
     script:
     """
-    annotation_script=""
-    old_ifs="\$IFS"
-    IFS=':'
-    for path_dir in \$PATH; do
-        if [ -f "\${path_dir}/methylkit_annotation.R" ]; then
-            annotation_script="\${path_dir}/methylkit_annotation.R"
-            break
-        fi
-    done
-    IFS="\$old_ifs"
-    if [ -z "\${annotation_script}" ]; then
-        echo "Could not find methylkit_annotation.R on PATH" >&2
-        exit 1
-    fi
-
-    Rscript "\${annotation_script}" \\
+    methylkit_annotation.R \\
         --dmr_tsv    ${dmr_tsv} \\
         --caller     '${caller}' \\
         --result_type '${result_type}' \\
